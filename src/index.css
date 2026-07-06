@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-cream text-ink font-sans;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+  /* Subtle leaf-vein texture for the app background */
+  .app-bg {
+    background-color: #f7f4ec;
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(33, 102, 76, 0.05), transparent 40%),
+      radial-gradient(circle at 88% 12%, rgba(216, 167, 62, 0.06), transparent 38%);
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl2 border border-sand shadow-card;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+           transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1
+           focus:ring-brand-400 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-700 text-white hover:bg-brand-800 shadow-sm;
+  }
+  .btn-gold {
+    @apply btn bg-gold-400 text-brand-900 hover:bg-gold-500 shadow-sm;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-brand-800 hover:bg-brand-50;
+  }
+  .btn-outline {
+    @apply btn border border-sand bg-white text-ink hover:border-brand-300 hover:text-brand-800;
+  }
+  .btn-danger {
+    @apply btn bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-sand bg-white px-3 py-2 text-sm text-ink
+           placeholder:text-ink/30 focus:border-brand-400 focus:outline-none
+           focus:ring-2 focus:ring-brand-100 transition;
+  }
+  .label {
+    @apply block text-xs font-medium text-ink/60 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-brand-50/80
+           hover:bg-white/10 hover:text-white transition-colors;
+  }
+  .nav-link-active {
+    @apply bg-white/15 text-white shadow-inner;
+  }
+
+  .th {
+    @apply text-left text-[11px] font-semibold uppercase tracking-wider text-ink/45 px-4 py-3;
+  }
+  .td {
+    @apply px-4 py-3 text-sm text-ink/80 align-middle;
+  }
+}
