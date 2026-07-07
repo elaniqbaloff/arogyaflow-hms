@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  Users, Plus, Pencil, Trash2, Eye, BedDouble, Activity, FileText, Pill,
+  Users, Plus, Pencil, Archive, ArchiveRestore, Eye, BedDouble, Activity, FileText, Pill,
   FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle,
   User, Phone, HeartPulse, ClipboardList, IdCard, Venus, NotebookPen, AlertTriangle, ShieldAlert,
   Gauge,
@@ -115,7 +115,7 @@ const validate = (d) => {
 }
 
 export default function Patients() {
-  const { state, add, update, remove } = useHospital()
+  const { state, add, update, logAudit } = useHospital()
   const { activeIpdFor } = useLookups()
   const { user } = useAuth()
   const toast = useToast()
@@ -123,6 +123,7 @@ export default function Patients() {
   const [query, setQuery] = useState('')
   const [deptFilter, setDeptFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all') // all | opd | ipd | converted | discharged
+  const [showArchived, setShowArchived] = useState(false)
   const [form, setForm] = useState(null)
   const [detail, setDetail] = useState(null)
   const [convertFor, setConvertFor] = useState(null)
@@ -141,12 +142,15 @@ export default function Patients() {
   const filtered = useMemo(() => {
     return state.patients.filter((p) => {
       const q = query.toLowerCase()
+      const matchArchived = showArchived || p.status !== 'archived'
       const matchQ = !q || p.name.toLowerCase().includes(q) || (p.nameAr || '').includes(query) || p.mrn.toLowerCase().includes(q) || (p.phone || '').includes(q)
       const matchD = deptFilter === 'all' || p.department === deptFilter
       const matchT = typeFilter === 'all' || patientType(p) === typeFilter
-      return matchQ && matchD && matchT
+      return matchArchived && matchQ && matchD && matchT
     })
-  }, [state.patients, state.episodes, query, deptFilter, typeFilter])
+  }, [state.patients, state.episodes, query, deptFilter, typeFilter, showArchived])
+
+  const activeCount = useMemo(() => state.patients.filter((p) => p.status !== 'archived').length, [state.patients])
 
   const openAdd = () => setForm({ mode: 'add', data: blankPatient(), dupes: null })
   const openEdit = (p) => setForm({ mode: 'edit', data: withDefaults(p), dupes: null })
@@ -181,6 +185,20 @@ export default function Patients() {
     setForm(null)
   }
 
+  // Archive instead of hard-deleting so related episodes/bills/labs/etc. are
+  // never orphaned. Reversible via restore. No related records are removed.
+  const archivePatient = (p) => {
+    update('patients', p.id, { status: 'archived', archivedAt: new Date().toISOString(), archivedBy: user?.name || null })
+    logAudit({ user, action: 'patient.archive', module: 'patients', recordId: p.id, mrn: p.mrn, severity: 'warning' })
+    toast(`Archived ${p.name}. Their records are retained.`, 'info')
+  }
+
+  const restorePatient = (p) => {
+    update('patients', p.id, { status: 'active', archivedAt: null, archivedBy: null })
+    logAudit({ user, action: 'patient.restore', module: 'patients', recordId: p.id, mrn: p.mrn, severity: 'notice' })
+    toast(`Restored ${p.name}.`)
+  }
+
   const canCreate = can(user, 'patients.create')
   const canEdit = can(user, 'patients.update')
   const canDelete = can(user, 'patients.delete')
@@ -193,7 +211,7 @@ export default function Patients() {
     <>
       <PageHeader
         title="Patient Management"
-        subtitle={`${state.patients.length} patients · one MRN spans OPD & IPD`}
+        subtitle={`${activeCount} active patients · one MRN spans OPD & IPD`}
         icon={Users}
         actions={canCreate && <button className="btn-primary" onClick={openAdd}><Plus size={18} /> New Patient</button>}
       />
@@ -212,6 +230,10 @@ export default function Patients() {
             <Select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="w-auto">
               <option value="all">All departments</option>
               {state.departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </Select>
+            <Select value={showArchived ? 'yes' : 'no'} onChange={(e) => setShowArchived(e.target.value === 'yes')} className="w-auto">
+              <option value="no">Active only</option>
+              <option value="yes">Include archived</option>
             </Select>
           </div>
         </div>
@@ -239,6 +261,7 @@ export default function Patients() {
                             <p className="font-medium text-brand-900 flex items-center gap-1.5">
                               {p.name}
                               {flagAllergy && <span title={`Allergy: ${p.allergies}`}><AlertTriangle size={13} className="text-rose-500" /></span>}
+                              {p.status === 'archived' && <Badge tone="slate">Archived</Badge>}
                             </p>
                             {p.nameAr && <p className="text-xs text-ink/40" dir="rtl">{p.nameAr}</p>}
                           </div>
@@ -252,11 +275,17 @@ export default function Patients() {
                       <td className="td">
                         <div className="flex items-center justify-end gap-1">
                           <button className="btn-ghost btn-sm" onClick={() => setDetail(p)} title="View"><Eye size={15} /></button>
-                          {canConvert && !activeIpdFor(p.id) && (
-                            <button className="btn-ghost btn-sm text-brand-700" onClick={() => setConvertFor(p)} title="Convert to IPD"><BedDouble size={15} /></button>
-                          )}
-                          {canEdit && <button className="btn-ghost btn-sm" onClick={() => openEdit(p)} title="Edit"><Pencil size={15} /></button>}
-                          {canDelete && <button className="btn-ghost btn-sm text-rose-600" onClick={() => setConfirm(p)} title="Delete"><Trash2 size={15} /></button>}
+                          {p.status === 'archived'
+                            ? (canDelete && <button className="btn-ghost btn-sm text-brand-700" onClick={() => restorePatient(p)} title="Restore"><ArchiveRestore size={15} /></button>)
+                            : (
+                              <>
+                                {canConvert && !activeIpdFor(p.id) && (
+                                  <button className="btn-ghost btn-sm text-brand-700" onClick={() => setConvertFor(p)} title="Convert to IPD"><BedDouble size={15} /></button>
+                                )}
+                                {canEdit && <button className="btn-ghost btn-sm" onClick={() => openEdit(p)} title="Edit"><Pencil size={15} /></button>}
+                                {canDelete && <button className="btn-ghost btn-sm text-rose-600" onClick={() => setConfirm(p)} title="Archive"><Archive size={15} /></button>}
+                              </>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -275,9 +304,10 @@ export default function Patients() {
       <ConfirmDialog
         open={!!confirm}
         onClose={() => setConfirm(null)}
-        onConfirm={() => { remove('patients', confirm.id); toast(`Removed ${confirm.name}.`, 'info') }}
-        title="Delete patient?"
-        message={confirm ? `This will permanently remove ${confirm.name} (${confirm.mrn}). This cannot be undone.` : ''}
+        onConfirm={() => archivePatient(confirm)}
+        title="Archive patient?"
+        confirmLabel="Archive"
+        message={confirm ? `This will archive ${confirm.name} (${confirm.mrn}) and hide them from the active list. Their episodes, bills, lab and clinical records are kept, and you can restore them later.` : ''}
       />
     </>
   )
