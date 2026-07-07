@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { users as seedUsers } from '../data/seed'
+import { adapter } from '../services/storageAdapter'
 
 const AUTH_KEY = 'palikutty-hms-auth-v1'
 const AuthContext = createContext(null)
@@ -20,7 +21,12 @@ export function AuthProvider({ children }) {
   }, [user])
 
   const login = (email, password) => {
-    const found = seedUsers.find(
+    // Authenticate against the persisted hospital state's users (so accounts
+    // created/edited/disabled in Settings take effect). Fall back to seed
+    // users only when no persisted users exist.
+    const persisted = adapter.read()
+    const users = persisted?.users?.length ? persisted.users : seedUsers
+    const found = users.find(
       (u) => u.email.toLowerCase() === email.toLowerCase().trim()
     )
     if (!found) return { ok: false, error: 'No account found for that email.' }
