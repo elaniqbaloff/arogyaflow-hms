@@ -18,6 +18,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { uid, today } from '../lib/utils'
+import { buildAudit } from './workflow'
 
 // Generic CRUD factory bound to a collection name.
 function crud(collection, prim) {
@@ -62,12 +63,116 @@ export function buildRepositories(prim) {
 
   // ── Domain extensions on top of generic CRUD ──
 
+  // Records an audit row for a task lifecycle verb, same shape logAudit uses.
+  const taskAudit = (user, action, task, oldValue, newValue, remarks) => {
+    prim.add('audit', buildAudit({
+      user, action, module: 'tasks', recordId: task.id, mrn: task.mrn,
+      oldValue: oldValue ?? null, newValue: newValue ?? null, remarks: remarks || '',
+    }))
+  }
+
   base.tasks = {
     ...base.tasks,
     open: () => base.tasks.where((t) => t.status === 'Pending' || t.status === 'In Progress'),
     forRole: (role) => base.tasks.where((t) => t.assignedRole === role),
     setStatus: (id, status) => prim.update('tasks', id, { status, updatedAt: new Date().toISOString() }),
-    complete: (id) => prim.update('tasks', id, { status: 'Completed', updatedAt: new Date().toISOString() }),
+
+    // Lock-safe lifecycle verbs. Every verb returns {ok, reason?} and never throws.
+    accept: (id, user) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (task.acceptedBy) return { ok: false, reason: 'already-accepted' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, { acceptedBy: user?.name || null, acceptedAt: now, status: 'Accepted', updatedAt: now })
+      taskAudit(user, 'task.accepted', task, task.status, 'Accepted')
+      return { ok: true }
+    },
+
+    start: (id, user) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (!task.acceptedBy || task.acceptedBy !== user?.name) return { ok: false, reason: 'not-owner' }
+      if (task.status !== 'Accepted') return { ok: false, reason: 'invalid-status' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, { startedAt: now, status: 'In Progress', updatedAt: now })
+      taskAudit(user, 'task.started', task, task.status, 'In Progress')
+      return { ok: true }
+    },
+
+    // Owner-only, except an unclaimed task can be completed in one tap —
+    // that implicitly accepts + starts it for the completing user first.
+    complete: (id, user) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (['Completed', 'Cancelled'].includes(task.status)) return { ok: false, reason: 'invalid-status' }
+      if (task.acceptedBy && task.acceptedBy !== user?.name) return { ok: false, reason: 'not-owner' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, {
+        status: 'Completed',
+        completedAt: now,
+        updatedAt: now,
+        acceptedBy: task.acceptedBy || user?.name || null,
+        acceptedAt: task.acceptedAt || now,
+        startedAt: task.startedAt || now,
+      })
+      taskAudit(user, 'task.completed', task, task.status, 'Completed')
+      return { ok: true }
+    },
+
+    block: (id, user, reason) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (!task.acceptedBy || task.acceptedBy !== user?.name) return { ok: false, reason: 'not-owner' }
+      if (!['Accepted', 'In Progress'].includes(task.status)) return { ok: false, reason: 'invalid-status' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, { status: 'Blocked', blockedReason: reason || '', updatedAt: now })
+      taskAudit(user, 'task.blocked', task, task.status, 'Blocked', reason)
+      return { ok: true }
+    },
+
+    unblock: (id, user) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (task.status !== 'Blocked') return { ok: false, reason: 'invalid-status' }
+      if (!task.acceptedBy || task.acceptedBy !== user?.name) return { ok: false, reason: 'not-owner' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, { status: 'In Progress', blockedReason: null, updatedAt: now })
+      taskAudit(user, 'task.unblocked', task, task.status, 'In Progress')
+      return { ok: true }
+    },
+
+    // Clears the ownership lock and returns the task to the open pool.
+    release: (id, user) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (['Completed', 'Cancelled'].includes(task.status)) return { ok: false, reason: 'invalid-status' }
+      const now = new Date().toISOString()
+      prim.update('tasks', id, {
+        status: 'Pending', acceptedBy: null, acceptedAt: null, startedAt: null, blockedReason: null, updatedAt: now,
+      })
+      taskAudit(user, 'task.released', task, task.status, 'Pending')
+      return { ok: true }
+    },
+
+    // Re-routes an unfinished task to a new department/role/user and clears
+    // the previous lock so the new owner starts from a clean 'Pending' state.
+    reassign: (id, user, { department, role, userId } = {}) => {
+      const task = base.tasks.byId(id)
+      if (!task) return { ok: false, reason: 'not-found' }
+      if (['Completed', 'Cancelled'].includes(task.status)) return { ok: false, reason: 'invalid-status' }
+      const now = new Date().toISOString()
+      const changes = {
+        status: 'Pending', acceptedBy: null, acceptedAt: null, startedAt: null, blockedReason: null, updatedAt: now,
+      }
+      if (department) changes.assignedDepartment = department
+      if (role) changes.assignedRole = role
+      if (userId !== undefined) changes.assignedUserId = userId
+      prim.update('tasks', id, changes)
+      taskAudit(user, 'task.reassigned', task,
+        `${task.assignedDepartment || ''}/${task.assignedRole || ''}`,
+        `${changes.assignedDepartment || task.assignedDepartment || ''}/${changes.assignedRole || task.assignedRole || ''}`)
+      return { ok: true }
+    },
   }
 
   base.approvals = {

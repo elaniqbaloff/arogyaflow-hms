@@ -43,6 +43,7 @@ export const ROLES = {
       'patients.read', 'appointments.read', 'ipd.read', 'therapy.read',
       'billing.read', 'reports.read', 'reports.export',
       'tasks.read',
+      'tasks.reassign',
       'approvals.read',
       'approvals.decide',
       'audit.read',
