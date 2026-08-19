@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download } from 'lucide-react'
+import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download, Smile } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { PageHeader, StatCard, Field, Input } from '../components/ui/primitives'
 import { inr, formatDate } from '../lib/utils'
@@ -42,6 +42,30 @@ export default function Reports() {
     const conversions = state.episodes.filter((e) => e.type === 'IPD' && e.convertedFrom).length
     const opdCount = new Set(state.episodes.filter((e) => e.type === 'OPD').map((e) => e.patientId)).size
 
+    // Dental (§9.9) — procedure-plan items, all derived, no new collection needed here.
+    const dentalItems = (state.procedurePlans || []).flatMap((p) =>
+      p.items.map((i) => ({ ...i, planId: p.id, patientId: p.patientId, mrn: p.mrn }))
+    )
+    const dentalCompleted = dentalItems.filter((i) => i.status === 'completed' && inRange((i.completedAt || '').slice(0, 10)))
+    const dentalRevenue = dentalCompleted.reduce((s, i) => s + (i.estAmount || 0), 0)
+
+    const byProcedure = {}
+    dentalCompleted.forEach((i) => {
+      const row = byProcedure[i.procedureName] || { count: 0, value: 0 }
+      row.count += 1
+      row.value += i.estAmount || 0
+      byProcedure[i.procedureName] = row
+    })
+    const dentalProcedureData = Object.entries(byProcedure)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.count - a.count)
+
+    const dentalFollowupTasks = state.tasks.filter((t) => t.type === 'dental-followup' && inRange((t.createdAt || '').slice(0, 10)))
+    const dentalFollowupDone = dentalFollowupTasks.filter((t) => t.status === 'Completed').length
+    const dentalFollowupRate = dentalFollowupTasks.length
+      ? Math.round((dentalFollowupDone / dentalFollowupTasks.length) * 100)
+      : null
+
     return {
       revenue, billed, revenueData, patientData,
       stockData: [{ name: 'Ayurveda', value: ayur }, { name: 'Modern', value: modern }],
@@ -51,6 +75,8 @@ export default function Reports() {
       activeIpd, discharged, conversions, opdCount,
       therapyDone: state.therapies.filter((t) => t.status === 'completed').length,
       occupancy: state.beds.length ? Math.round((state.beds.filter((b) => b.status === 'occupied').length / state.beds.length) * 100) : 0,
+      dentalItems, dentalCompleted, dentalRevenue, dentalProcedureData,
+      dentalFollowupTasks, dentalFollowupDone, dentalFollowupRate,
     }
   }, [state, from, to])
 
@@ -91,9 +117,16 @@ export default function Reports() {
     { label: 'Cost', value: 'cost' }, { label: 'Status', value: 'status' },
   ], state.therapies.filter((t) => inRange(t.date)))
 
+  const csvDental = () => exportCsv('dental_procedures', [
+    { label: 'Procedure', value: 'procedureName' }, { label: 'Patient', value: (i) => patientName(i.patientId) },
+    { label: 'MRN', value: 'mrn' }, { label: 'Tooth', value: (i) => i.tooth || '' },
+    { label: 'Phase', value: (i) => i.phase || '' }, { label: 'Completed', value: (i) => (i.completedAt || '').slice(0, 10) },
+    { label: 'Amount', value: 'estAmount' },
+  ], data.dentalCompleted)
+
   const exports = [
     ['Patients', csvPatients], ['Billing', csvBilling], ['Appointments', csvAppointments],
-    ['IPD Records', csvIpd], ['Panchakarma', csvTherapy],
+    ['IPD Records', csvIpd], ['Panchakarma', csvTherapy], ['Dental Procedures', csvDental],
   ]
 
   return (
@@ -172,6 +205,49 @@ export default function Reports() {
             <Mix label="OPD→IPD conversions" value={data.conversions} tone="text-brand-700" />
             <Mix label="Discharged IPD" value={data.discharged} tone="text-gold-600" />
           </div>
+        </div>
+      </div>
+
+      {/* Dental (§9.9) */}
+      <div className="mt-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Smile size={18} className="text-sky-600" />
+          <h2 className="font-display text-lg font-semibold text-brand-900">Dental</h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard label="Procedures Completed" value={data.dentalCompleted.length} icon={Smile} tone="sky" />
+          <StatCard label="Procedure Value" value={inr(data.dentalRevenue)} icon={IndianRupee} sub="Billed from completed items" />
+          <StatCard
+            label="Follow-up Compliance"
+            value={data.dentalFollowupRate == null ? '—' : `${data.dentalFollowupRate}%`}
+            icon={CalendarCheck}
+            tone="gold"
+            sub={data.dentalFollowupTasks.length ? `${data.dentalFollowupDone} of ${data.dentalFollowupTasks.length} closed` : 'No follow-ups raised'}
+          />
+          <StatCard label="Procedure Types" value={data.dentalProcedureData.length} icon={Smile} />
+        </div>
+
+        <div className="mt-4 card overflow-hidden">
+          <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Top Procedures</h3></div>
+          {data.dentalProcedureData.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink/40">No completed dental procedures in this period.</p>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-cream/60"><tr>
+                <th className="th">Procedure</th><th className="th text-right">Completed</th><th className="th text-right">Value</th>
+              </tr></thead>
+              <tbody className="divide-y divide-sand">
+                {data.dentalProcedureData.map((row) => (
+                  <tr key={row.name} className="hover:bg-cream/40">
+                    <td className="td font-medium text-brand-900">{row.name}</td>
+                    <td className="td text-right">{row.count}</td>
+                    <td className="td text-right">{inr(row.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </>
