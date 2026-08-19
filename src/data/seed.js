@@ -14,18 +14,24 @@ import { daysFromNow, today } from '../lib/utils'
 // Records are cross-linked by id so the demo feels connected.
 // ─────────────────────────────────────────────────────────────
 
+// `type` is the original, still-used ayurveda/modern/support/wellness split
+// consultationTemplates.js falls back to. `category` is the newer, slightly
+// different grouping used for department-engine/visual purposes (Physio/OT/
+// Audiology moved from 'support' to 'allied' there). `head` references a
+// user/doctor id where a matching record exists in doctors/users, otherwise
+// it stays the plain name string — no user was invented for the rest.
 export const departments = [
-  { id: 'dep_ayur', name: 'Ayurveda', type: 'ayurveda', head: 'Dr. Anand Varma' },
-  { id: 'dep_allo', name: 'Allopathy', type: 'modern', head: 'Dr. Reema Joseph' },
-  { id: 'dep_dental', name: 'Dental', type: 'modern', head: 'Dr. Faisal Rahman' },
-  { id: 'dep_physio', name: 'Physiotherapy', type: 'support', head: 'Dr. Kavya Nair' },
-  { id: 'dep_ot', name: 'Occupational Therapy', type: 'support', head: 'Dr. Suresh Menon' },
-  { id: 'dep_audio', name: 'Audiology & Speech', type: 'support', head: 'Dr. Leena Thomas' },
-  { id: 'dep_yoga', name: 'Yoga & Fitness', type: 'wellness', head: 'Mr. Gopan Das' },
-  { id: 'dep_beauty', name: 'Ayur Beauty Clinic', type: 'wellness', head: 'Dr. Priya Sasi' },
-  { id: 'dep_diet', name: 'Diet & Nutrition', type: 'wellness', head: 'Ms. Anjali Pillai' },
-  { id: 'dep_diag', name: 'Diagnostics', type: 'support', head: 'Dr. Hari Krishnan' },
-  { id: 'dep_pancha', name: 'Panchakarma', type: 'ayurveda', head: 'Dr. Anand Varma' },
+  { id: 'dep_ayur', name: 'Ayurveda', type: 'ayurveda', head: 'usr_doc', code: 'AYUR', category: 'ayurveda', color: 'green', icon: 'Leaf', appointmentTypes: ['Consultation', 'Follow-up', 'Panchakarma Review'], consultationTemplate: 'ayurveda', active: true },
+  { id: 'dep_allo', name: 'Allopathy', type: 'modern', head: 'usr_doc2', code: 'ALLO', category: 'modern', color: 'sky', icon: 'Stethoscope', appointmentTypes: ['Consultation', 'Follow-up'], consultationTemplate: 'common', active: true },
+  { id: 'dep_dental', name: 'Dental', type: 'modern', head: 'doc_dental', code: 'DENT', category: 'modern', color: 'sky', icon: 'Smile', appointmentTypes: ['Consultation', 'Follow-up', 'Procedure'], consultationTemplate: 'common', active: true },
+  { id: 'dep_physio', name: 'Physiotherapy', type: 'support', head: 'doc_physio', code: 'PHYS', category: 'allied', color: 'gold', icon: 'Activity', appointmentTypes: ['Assessment', 'Session', 'Follow-up'], consultationTemplate: 'common', active: true },
+  { id: 'dep_ot', name: 'Occupational Therapy', type: 'support', head: 'Dr. Suresh Menon', code: 'OT', category: 'allied', color: 'gold', icon: 'HandHeart', appointmentTypes: ['Assessment', 'Session', 'Follow-up'], consultationTemplate: 'common', active: true },
+  { id: 'dep_audio', name: 'Audiology & Speech', type: 'support', head: 'Dr. Leena Thomas', code: 'AUDIO', category: 'allied', color: 'gold', icon: 'Ear', appointmentTypes: ['Assessment', 'Session', 'Follow-up'], consultationTemplate: 'common', active: true },
+  { id: 'dep_yoga', name: 'Yoga & Fitness', type: 'wellness', head: 'Mr. Gopan Das', code: 'YOGA', category: 'wellness', color: 'rose', icon: 'PersonStanding', appointmentTypes: ['Session', 'Assessment'], consultationTemplate: 'common', active: true },
+  { id: 'dep_beauty', name: 'Ayur Beauty Clinic', type: 'wellness', head: 'doc_beauty', code: 'BEAUTY', category: 'wellness', color: 'rose', icon: 'Sparkles', appointmentTypes: ['Consultation', 'Treatment'], consultationTemplate: 'common', active: true },
+  { id: 'dep_diet', name: 'Diet & Nutrition', type: 'wellness', head: 'Ms. Anjali Pillai', code: 'DIET', category: 'wellness', color: 'rose', icon: 'Apple', appointmentTypes: ['Consultation', 'Follow-up'], consultationTemplate: 'common', active: true },
+  { id: 'dep_diag', name: 'Diagnostics', type: 'support', head: 'Dr. Hari Krishnan', code: 'DIAG', category: 'support', color: 'slate', icon: 'FlaskConical', appointmentTypes: ['Sample Collection', 'Result Review'], consultationTemplate: 'common', active: true },
+  { id: 'dep_pancha', name: 'Panchakarma', type: 'ayurveda', head: 'usr_doc', code: 'PANCH', category: 'ayurveda', color: 'green', icon: 'Flower2', appointmentTypes: ['Therapy Session', 'Consultation', 'Follow-up'], consultationTemplate: 'ayurveda', active: true },
 ]
 
 // Demo accounts — one per role. Passwords illustrative only.

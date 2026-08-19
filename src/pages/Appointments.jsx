@@ -3,6 +3,7 @@ import { CalendarDays, Plus, Pencil, Trash2, CheckCircle2, XCircle } from 'lucid
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
+import { departmentOptions } from '../config/departmentUtils'
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
@@ -174,7 +175,7 @@ export default function Appointments() {
             </Field>
             <Field label="Department">
               <Select value={form.data.department} onChange={(e) => setForm({ ...form, data: { ...form.data, department: e.target.value } })}>
-                {state.departments.map((d) => <option key={d.id}>{d.name}</option>)}
+                {departmentOptions(state).map((d) => <option key={d.id}>{d.name}</option>)}
               </Select>
             </Field>
             <Field label="Status">

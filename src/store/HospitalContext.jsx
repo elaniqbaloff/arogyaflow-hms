@@ -41,7 +41,36 @@ function ensureCollections(s) {
   for (const k of keys) if (!merged[k]) merged[k] = defaults[k] || []
   if (!merged.meta) merged.meta = defaults.meta
   merged.tasks = (merged.tasks || []).map(migrateTask)
+  merged.departments = (merged.departments || []).map((d) => migrateDepartment(d, defaults.departments))
   return merged
+}
+
+// Fallback values for a persisted department with no seed match at all
+// (e.g. a custom department a user added before this migration existed).
+const DEPARTMENT_FALLBACK = {
+  category: 'support', color: 'slate', icon: 'Building2',
+  appointmentTypes: ['Consultation'], consultationTemplate: 'common', active: true,
+}
+
+// Idempotent per-department migration: backfills the config fields the
+// department engine needs (code/category/color/icon/appointmentTypes/
+// consultationTemplate/active), matching legacy records by id against the
+// current seed. Leaves already-migrated departments untouched.
+function migrateDepartment(dept, seedDepartments) {
+  const hasAllFields = ['code', 'category', 'color', 'icon', 'appointmentTypes', 'consultationTemplate', 'active']
+    .every((k) => dept[k] !== undefined)
+  if (hasAllFields) return dept
+  const seedMatch = (seedDepartments || []).find((d) => d.id === dept.id) || {}
+  return {
+    ...dept,
+    code: dept.code ?? seedMatch.code ?? dept.id?.toUpperCase(),
+    category: dept.category ?? seedMatch.category ?? DEPARTMENT_FALLBACK.category,
+    color: dept.color ?? seedMatch.color ?? DEPARTMENT_FALLBACK.color,
+    icon: dept.icon ?? seedMatch.icon ?? DEPARTMENT_FALLBACK.icon,
+    appointmentTypes: dept.appointmentTypes ?? seedMatch.appointmentTypes ?? DEPARTMENT_FALLBACK.appointmentTypes,
+    consultationTemplate: dept.consultationTemplate ?? seedMatch.consultationTemplate ?? DEPARTMENT_FALLBACK.consultationTemplate,
+    active: dept.active ?? seedMatch.active ?? DEPARTMENT_FALLBACK.active,
+  }
 }
 
 // Idempotent per-task migration: backfills ownership fields introduced for

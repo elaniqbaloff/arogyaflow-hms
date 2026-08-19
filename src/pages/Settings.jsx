@@ -9,6 +9,7 @@ import {
   PageHeader, Badge, Field, Input, Select, EmptyState, Avatar,
 } from '../components/ui/primitives'
 import { BRAND } from '../config/brand'
+import { departmentHeadName } from '../config/departmentUtils'
 import { uid, formatDate } from '../lib/utils'
 
 export default function Settings() {
@@ -182,7 +183,7 @@ export default function Settings() {
                 <tr key={d.id} className="hover:bg-cream/40">
                   <td className="td font-medium text-brand-900">{d.name}</td>
                   <td className="td"><Badge tone={d.type === 'ayurveda' ? 'green' : d.type === 'modern' ? 'sky' : 'gold'}>{d.type}</Badge></td>
-                  <td className="td text-ink/60">{d.head}</td>
+                  <td className="td text-ink/60">{departmentHeadName(state, d)}</td>
                 </tr>
               ))}
             </tbody>

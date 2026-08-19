@@ -58,15 +58,40 @@ export const MANDATORY_AYURVEDA_FIELDS = [
 ]
 
 // Department types treated as "Ayurveda-first" for template purposes.
+// (Legacy fallback — see templateKeyFor below.)
 export const AYURVEDA_DEPARTMENT_TYPES = ['ayurveda']
+
+// Keyed template registry. A department picks its template via
+// `consultationTemplate` ('ayurveda' | 'common' for now); more keys can be
+// added here as new department categories get their own field sets.
+export const TEMPLATES = {
+  ayurveda: {
+    fields: [...COMMON_FIELDS, ...AYURVEDA_FIELDS],
+    mandatory: [...MANDATORY_COMMON_FIELDS, ...MANDATORY_AYURVEDA_FIELDS],
+  },
+  common: {
+    fields: [...COMMON_FIELDS],
+    mandatory: [...MANDATORY_COMMON_FIELDS],
+  },
+}
+
+// Resolves a department to a TEMPLATES key: prefers the department's own
+// `consultationTemplate`; falls back to the old type-based check for
+// departments that predate that field (e.g. not-yet-migrated legacy state).
+function templateKeyFor(department) {
+  if (!department) return 'common'
+  if (department.consultationTemplate && TEMPLATES[department.consultationTemplate]) {
+    return department.consultationTemplate
+  }
+  return AYURVEDA_DEPARTMENT_TYPES.includes(department.type) ? 'ayurveda' : 'common'
+}
 
 /**
  * Returns true if the given department object should use the
  * Ayurveda consultation template.
  */
 export function isAyurvedaDepartment(department) {
-  if (!department) return false
-  return AYURVEDA_DEPARTMENT_TYPES.includes(department.type)
+  return templateKeyFor(department) === 'ayurveda'
 }
 
 /**
@@ -74,9 +99,7 @@ export function isAyurvedaDepartment(department) {
  * consultation form, based on the department.
  */
 export function getConsultationFields(department) {
-  return isAyurvedaDepartment(department)
-    ? [...COMMON_FIELDS, ...AYURVEDA_FIELDS]
-    : [...COMMON_FIELDS]
+  return [...TEMPLATES[templateKeyFor(department)].fields]
 }
 
 /**
@@ -84,9 +107,7 @@ export function getConsultationFields(department) {
  * based on the department.
  */
 export function getMandatoryFields(department) {
-  return isAyurvedaDepartment(department)
-    ? [...MANDATORY_COMMON_FIELDS, ...MANDATORY_AYURVEDA_FIELDS]
-    : [...MANDATORY_COMMON_FIELDS]
+  return [...TEMPLATES[templateKeyFor(department)].mandatory]
 }
 
 // ── Vitals abnormal-range thresholds (used by flagAbnormalVitals) ──

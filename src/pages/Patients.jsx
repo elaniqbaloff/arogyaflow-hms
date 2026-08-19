@@ -9,6 +9,7 @@ import {
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
+import { departmentOptions } from '../config/departmentUtils'
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
@@ -231,7 +232,7 @@ export default function Patients() {
             </Select>
             <Select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="w-auto">
               <option value="all">All departments</option>
-              {state.departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              {departmentOptions(state).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
             </Select>
             <Select value={showArchived ? 'yes' : 'no'} onChange={(e) => setShowArchived(e.target.value === 'yes')} className="w-auto">
               <option value="no">Active only</option>
@@ -299,7 +300,7 @@ export default function Patients() {
         )}
       </div>
 
-      {form && <PatientForm form={form} setForm={setForm} onSave={save} departments={state.departments} />}
+      {form && <PatientForm form={form} setForm={setForm} onSave={save} departments={departmentOptions(state)} />}
       {detail && <PatientDetail patient={detail} onClose={() => setDetail(null)} onConvert={canConvert ? (p) => { setDetail(null); setConvertFor(p) } : null} />}
       {convertFor && <ConvertModal patient={convertFor} onClose={() => setConvertFor(null)} />}
 
