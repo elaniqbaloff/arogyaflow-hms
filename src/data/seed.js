@@ -254,6 +254,7 @@ export const bills = [
 ]
 
 import { pricing, billableItems, tasks, approvals, audit, snapshots } from './workflowSeed'
+import { clinicalTerms } from './clinicalDictionary'
 
 export const buildInitialState = () => ({
   departments, users, doctors, nurses,
@@ -263,5 +264,6 @@ export const buildInitialState = () => ({
   vitals, nursingNotes, therapies,
   bills,
   pricing, billableItems, tasks, approvals, audit, snapshots,
+  clinicalTerms,
   meta: { seededAt: new Date().toISOString(), version: 3, product: 'ArogyaFlow' },
 })

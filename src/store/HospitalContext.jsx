@@ -36,7 +36,7 @@ function ensureCollections(s) {
   const keys = ['pricing', 'billableItems', 'tasks', 'approvals', 'audit', 'snapshots',
     'patients', 'episodes', 'beds', 'appointments', 'consultations', 'prescriptions',
     'medicines', 'labTests', 'vitals', 'nursingNotes', 'therapies', 'bills', 'users',
-    'doctors', 'nurses', 'departments']
+    'doctors', 'nurses', 'departments', 'clinicalTerms']
   const merged = { ...s }
   for (const k of keys) if (!merged[k]) merged[k] = defaults[k] || []
   if (!merged.meta) merged.meta = defaults.meta
