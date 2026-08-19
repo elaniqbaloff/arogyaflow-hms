@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Users, Plus, Pencil, Archive, ArchiveRestore, Eye, BedDouble, Activity, FileText, Pill,
   FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle,
@@ -120,7 +121,8 @@ export default function Patients() {
   const { user } = useAuth()
   const toast = useToast()
 
-  const [query, setQuery] = useState('')
+  const [searchParams] = useSearchParams()
+  const [query, setQuery] = useState(() => searchParams.get('q') || '')
   const [deptFilter, setDeptFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all') // all | opd | ipd | converted | discharged
   const [showArchived, setShowArchived] = useState(false)
