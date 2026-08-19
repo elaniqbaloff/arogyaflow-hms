@@ -26,25 +26,42 @@ export function buildAudit({ user, action, module, recordId, mrn, oldValue, newV
 }
 
 // ── Tasks / notifications ──
-export const TASK_STATUS = ['Pending', 'In Progress', 'Completed', 'Cancelled']
+export const TASK_STATUS = ['Pending', 'Accepted', 'In Progress', 'Blocked', 'Completed', 'Cancelled']
 export const TASK_PRIORITY = ['Low', 'Normal', 'High', 'Critical']
 
-// Common task types and which role they route to.
-export const TASK_ROUTES = {
-  'lab-request': { assignedRole: 'lab', label: 'Lab test requested' },
-  'pharmacy-dispense': { assignedRole: 'pharmacy', label: 'Prescription to dispense' },
-  'billing-clearance': { assignedRole: 'finance', label: 'Billing clearance for discharge' },
-  'discharge-clearance': { assignedRole: 'reception', label: 'Discharge clearance ready' },
-  'low-stock': { assignedRole: 'pharmacy', label: 'Low stock alert' },
-  'near-expiry': { assignedRole: 'pharmacy', label: 'Near-expiry medicine' },
-  'discount-approval': { assignedRole: 'finance', label: 'Discount approval requested' },
-  'bilingual-doc': { assignedRole: 'reception', label: 'Arabic/bilingual document required' },
-  'critical-lab': { assignedRole: 'doctor', label: 'Critical lab result' },
-  'bed-cleaning': { assignedRole: 'reception', label: 'Bed marked for cleaning' },
-  'nursing-clearance': { assignedRole: 'nurse', label: 'Nursing discharge clearance' },
+// Role -> operational department code, used to derive assignedDepartment
+// for routes/legacy tasks that only carry an assignedRole.
+export const ROLE_DEPARTMENT = {
+  lab: 'DIAG',
+  pharmacy: 'PHAR',
+  finance: 'FIN',
+  reception: 'FRONT',
+  doctor: 'AYUR',
+  nurse: 'IPD',
+  admin: 'ADMIN',
+  management: 'ADMIN',
+  it: 'ADMIN',
 }
 
-export function buildTask({ type, priority = 'Normal', mrn, sourceRole, assignedRole, createdBy, relatedId, notes, dueAt }) {
+// Common task types and which role/department they route to.
+export const TASK_ROUTES = {
+  'lab-request': { assignedRole: 'lab', assignedDepartment: 'DIAG', label: 'Lab test requested' },
+  'pharmacy-dispense': { assignedRole: 'pharmacy', assignedDepartment: 'PHAR', label: 'Prescription to dispense' },
+  'billing-clearance': { assignedRole: 'finance', assignedDepartment: 'FIN', label: 'Billing clearance for discharge' },
+  'discharge-clearance': { assignedRole: 'reception', assignedDepartment: 'FRONT', label: 'Discharge clearance ready' },
+  'low-stock': { assignedRole: 'pharmacy', assignedDepartment: 'PHAR', label: 'Low stock alert' },
+  'near-expiry': { assignedRole: 'pharmacy', assignedDepartment: 'PHAR', label: 'Near-expiry medicine' },
+  'discount-approval': { assignedRole: 'finance', assignedDepartment: 'FIN', label: 'Discount approval requested' },
+  'bilingual-doc': { assignedRole: 'reception', assignedDepartment: 'FRONT', label: 'Arabic/bilingual document required' },
+  'critical-lab': { assignedRole: 'doctor', assignedDepartment: 'AYUR', label: 'Critical lab result' },
+  'bed-cleaning': { assignedRole: 'reception', assignedDepartment: 'FRONT', label: 'Bed marked for cleaning' },
+  'nursing-clearance': { assignedRole: 'nurse', assignedDepartment: 'IPD', label: 'Nursing discharge clearance' },
+}
+
+export function buildTask({
+  type, priority = 'Normal', mrn, sourceRole, assignedRole, assignedDepartment, assignedUserId,
+  createdBy, relatedId, notes, dueAt,
+}) {
   const route = TASK_ROUTES[type] || {}
   return {
     id: uid('tsk'),
@@ -54,12 +71,19 @@ export function buildTask({ type, priority = 'Normal', mrn, sourceRole, assigned
     mrn: mrn || null,
     sourceRole: sourceRole || 'system',
     assignedRole: assignedRole || route.assignedRole || 'admin',
+    assignedDepartment: assignedDepartment || route.assignedDepartment || null,
+    assignedUserId: assignedUserId || null,
     status: 'Pending',
     createdBy: createdBy || 'System',
     createdAt: new Date().toISOString(),
     dueAt: dueAt || null,
     relatedId: relatedId || null,
     notes: notes || '',
+    acceptedBy: null,
+    acceptedAt: null,
+    startedAt: null,
+    completedAt: null,
+    blockedReason: null,
   }
 }
 

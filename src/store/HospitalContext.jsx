@@ -3,7 +3,7 @@ import { reducer } from './reducer'
 import { buildInitialState } from '../data/seed'
 import { adapter, LEGACY_KEYS } from '../services/storageAdapter'
 import { buildRepositories } from '../services/repositories'
-import { buildAudit, buildTask } from '../services/workflow'
+import { buildAudit, buildTask, ROLE_DEPARTMENT } from '../services/workflow'
 
 // v3: ArogyaFlow — added pricing/billableItems/tasks/approvals/audit/snapshots
 // and a swappable storage adapter. State now flows through the adapter so a
@@ -40,7 +40,24 @@ function ensureCollections(s) {
   const merged = { ...s }
   for (const k of keys) if (!merged[k]) merged[k] = defaults[k] || []
   if (!merged.meta) merged.meta = defaults.meta
+  merged.tasks = (merged.tasks || []).map(migrateTask)
   return merged
+}
+
+// Idempotent per-task migration: backfills ownership fields introduced for
+// task ownership/lifecycle tracking. Leaves already-migrated tasks untouched.
+function migrateTask(task) {
+  if (task.assignedDepartment !== undefined && task.acceptedBy !== undefined) return task
+  return {
+    ...task,
+    assignedDepartment: task.assignedDepartment ?? ROLE_DEPARTMENT[task.assignedRole] ?? null,
+    assignedUserId: task.assignedUserId ?? null,
+    acceptedBy: task.acceptedBy ?? null,
+    acceptedAt: task.acceptedAt ?? null,
+    startedAt: task.startedAt ?? null,
+    completedAt: task.completedAt ?? null,
+    blockedReason: task.blockedReason ?? null,
+  }
 }
 
 export function HospitalProvider({ children }) {
