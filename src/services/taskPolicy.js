@@ -41,8 +41,9 @@ export function canActOnTask(user, task, action) {
       return isOwner
     case 'cancel':
       return manager || task.createdBy === user.name
-    case 'reassign':
     case 'release':
+      return isOwner || manager
+    case 'reassign':
       return manager
     default:
       return false
