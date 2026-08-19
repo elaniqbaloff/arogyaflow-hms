@@ -7,9 +7,8 @@ import { canApprove, APPROVAL_TYPES } from '../services/workflow'
 import { useToast } from '../components/ui/Toast'
 import { Modal } from '../components/ui/Modal'
 import { PageHeader, StatCard, Badge, Field, Textarea, Select, EmptyState } from '../components/ui/primitives'
+import { APPROVAL_STATUS_TONES } from '../config/statusTones'
 import { inr, formatDate } from '../lib/utils'
-
-const STATUS_TONE = { Pending: 'gold', Approved: 'green', Rejected: 'rose' }
 
 export default function Approvals() {
   const { state, decideApproval, logAudit } = useHospital()
@@ -98,7 +97,7 @@ export default function Approvals() {
                     </td>
                     <td className="td max-w-[220px] text-sm text-ink/60"><span className="block truncate">{a.reason}</span></td>
                     <td className="td">
-                      <Badge tone={STATUS_TONE[a.status]}>{a.status}</Badge>
+                      <Badge tone={APPROVAL_STATUS_TONES[a.status]}>{a.status}</Badge>
                       {a.status !== 'Pending' && a.decidedBy && <p className="mt-1 text-[11px] text-ink/40">by {a.decidedBy}</p>}
                     </td>
                     <td className="td">

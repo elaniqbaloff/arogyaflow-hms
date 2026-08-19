@@ -8,10 +8,8 @@ import { canSeeTask, canActOnTask } from '../services/taskPolicy'
 import { useToast } from '../components/ui/Toast'
 import { Modal } from '../components/ui/Modal'
 import { PageHeader, StatCard, Badge, Select, Field, Textarea, EmptyState } from '../components/ui/primitives'
+import { TASK_STATUS_TONES, TASK_PRIORITY_TONES } from '../config/statusTones'
 import { formatDate } from '../lib/utils'
-
-const PRIORITY_TONE = { Low: 'slate', Normal: 'sky', High: 'gold', Critical: 'rose' }
-const STATUS_TONE = { Pending: 'gold', Accepted: 'sky', 'In Progress': 'sky', Blocked: 'rose', Completed: 'green', Cancelled: 'slate' }
 
 // Roles tasks actually route to — the ones a reassign can target.
 const ROUTABLE_ROLES = ['lab', 'pharmacy', 'finance', 'reception', 'doctor', 'nurse']
@@ -143,11 +141,11 @@ export default function Tasks() {
                         <p className="text-[11px] text-rose-600 mt-0.5">Blocked: {t.blockedReason}</p>
                       )}
                     </td>
-                    <td className="td"><Badge tone={PRIORITY_TONE[t.priority]}>{t.priority}</Badge></td>
+                    <td className="td"><Badge tone={TASK_PRIORITY_TONES[t.priority]}>{t.priority}</Badge></td>
                     <td className="td font-mono text-xs text-ink/60">{t.mrn || '—'}</td>
                     <td className="td text-xs text-ink/50">{roleLabel(t.sourceRole)} → {roleLabel(t.assignedRole)}</td>
                     <td className="td text-ink/50">{formatDate(t.createdAt)}</td>
-                    <td className="td"><Badge tone={STATUS_TONE[t.status]}>{t.status}</Badge></td>
+                    <td className="td"><Badge tone={TASK_STATUS_TONES[t.status]}>{t.status}</Badge></td>
                     <td className="td">
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         {t.status === 'Pending' && canActOnTask(user, t, 'accept') && (

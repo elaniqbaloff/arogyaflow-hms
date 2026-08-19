@@ -1,5 +1,6 @@
 import { Search, Inbox } from 'lucide-react'
 import { cx, initials } from '../../lib/utils'
+import { STATUS_TONES } from '../../config/statusTones'
 
 export function PageHeader({ title, subtitle, actions, icon: Icon }) {
   return (
@@ -53,15 +54,8 @@ const BADGE_TONES = {
   slate: 'bg-slate-100 text-slate-600',
 }
 
-// Maps any status string to a sensible colour.
-const STATUS_MAP = {
-  scheduled: 'sky', completed: 'green', cancelled: 'rose', pending: 'gold',
-  paid: 'green', partial: 'gold', dispensed: 'green', active: 'green',
-  disabled: 'slate', requested: 'gold', 'in-progress': 'sky',
-}
-
 export function Badge({ children, tone, status }) {
-  const t = tone || STATUS_MAP[status] || 'slate'
+  const t = tone || STATUS_TONES[status] || 'slate'
   return <span className={cx('badge', BADGE_TONES[t])}>{children || status}</span>
 }
 
