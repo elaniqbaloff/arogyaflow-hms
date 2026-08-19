@@ -41,6 +41,8 @@ export const ROLE_DEPARTMENT = {
   admin: 'ADMIN',
   management: 'ADMIN',
   it: 'ADMIN',
+  dentist: 'DENT',
+  physiotherapist: 'PHYS',
 }
 
 // Common task types and which role/department they route to.

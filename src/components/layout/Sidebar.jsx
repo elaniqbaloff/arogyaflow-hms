@@ -2,16 +2,40 @@ import { NavLink } from 'react-router-dom'
 import { NAV, NAV_GROUPS } from '../../config/navigation'
 import { canSeeModule, roleLabel, ROLES } from '../../config/roles'
 import { useAuth } from '../../store/AuthContext'
+import { useHospital } from '../../store/HospitalContext'
+import { userDepartmentCode } from '../../services/accessPolicy'
+import { departmentIcon } from '../../config/departmentIcons'
 import { BrandWordmark } from './Brand'
 import { cx } from '../../lib/utils'
 import { LogOut } from 'lucide-react'
 
+// Departments that already have a dedicated module page (Lab, Panchakarma) —
+// their own hub link can wait, per the department-hub rollout plan.
+const DEPARTMENTS_WITH_DEDICATED_PAGES = ['DIAG', 'PANCH']
+
 export function Sidebar({ onNavigate }) {
   const { user, logout } = useAuth()
+  const { state } = useHospital()
   const items = NAV.filter((n) => canSeeModule(user, n.key))
   const accent = ROLES[user?.role]?.accent || '#21664c'
+  const isManager = user?.role === 'admin' || user?.role === 'management'
+  const myDeptCode = userDepartmentCode(user, state)
+
+  const departmentItems = (state.departments || [])
+    .filter((d) => d.active !== false && !DEPARTMENTS_WITH_DEDICATED_PAGES.includes(d.code))
+    .filter((d) => isManager || d.code === myDeptCode)
+    .map((d) => ({
+      key: `dept_${d.code}`,
+      label: d.name,
+      to: `/departments/${d.code}`,
+      icon: departmentIcon(d.icon),
+    }))
+
   const grouped = NAV_GROUPS
-    .map((group) => ({ group, items: items.filter((n) => n.group === group) }))
+    .map((group) => ({
+      group,
+      items: group === 'Departments' ? [...items.filter((n) => n.group === group), ...departmentItems] : items.filter((n) => n.group === group),
+    }))
     .filter((g) => g.items.length > 0)
 
   return (

@@ -1,12 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './store/AuthContext'
 import { ROLES } from './config/roles'
-import { AppLayout, RequireAuth, RequireModule } from './components/layout/AppLayout'
+import { AppLayout, RequireAuth, RequireModule, RequireDepartment } from './components/layout/AppLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Patients from './pages/Patients'
 import Appointments from './pages/Appointments'
 import Consultations from './pages/Consultations'
+import DepartmentHub from './pages/DepartmentHub'
 import IPD from './pages/IPD'
 import Nursing from './pages/Nursing'
 import Therapy from './pages/Therapy'
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/patients" element={guarded('patients', <Patients />)} />
         <Route path="/appointments" element={guarded('appointments', <Appointments />)} />
         <Route path="/consultations" element={guarded('consultations', <Consultations />)} />
+        <Route path="/departments/:code" element={<RequireDepartment><DepartmentHub /></RequireDepartment>} />
         <Route path="/ipd" element={guarded('ipd', <IPD />)} />
         <Route path="/nursing" element={guarded('nursing', <Nursing />)} />
         <Route path="/therapy" element={guarded('therapy', <Therapy />)} />

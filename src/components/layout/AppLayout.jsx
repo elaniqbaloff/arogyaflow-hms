@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useAuth } from '../../store/AuthContext'
+import { useHospital } from '../../store/HospitalContext'
 import { canSeeModule } from '../../config/roles'
+import { userDepartmentCode } from '../../services/accessPolicy'
 
 export function AppLayout() {
   const [drawer, setDrawer] = useState(false)
@@ -42,6 +44,16 @@ export function RequireAuth({ children }) {
   return children
 }
 
+function AccessRestricted({ message, path }) {
+  return (
+    <div className="mx-auto mt-20 max-w-md text-center">
+      <h2 className="text-xl font-semibold text-brand-900">Access restricted</h2>
+      <p className="mt-2 text-sm text-ink/50">{message}</p>
+      <p className="mt-1 text-xs text-ink/30">Requested: {path}</p>
+    </div>
+  )
+}
+
 // Guards a route by module key; bounces to the role's landing page.
 export function RequireModule({ moduleKey, children }) {
   const { user } = useAuth()
@@ -49,14 +61,31 @@ export function RequireModule({ moduleKey, children }) {
   if (!user) return <Navigate to="/login" replace />
   if (!canSeeModule(user, moduleKey)) {
     return (
-      <div className="mx-auto mt-20 max-w-md text-center">
-        <h2 className="text-xl font-semibold text-brand-900">Access restricted</h2>
-        <p className="mt-2 text-sm text-ink/50">
-          Your role doesn't have access to this module. If you believe this is a
-          mistake, contact your system administrator.
-        </p>
-        <p className="mt-1 text-xs text-ink/30">Requested: {location.pathname}</p>
-      </div>
+      <AccessRestricted
+        path={location.pathname}
+        message="Your role doesn't have access to this module. If you believe this is a mistake, contact your system administrator."
+      />
+    )
+  }
+  return children
+}
+
+// Guards a route by the :code department param — the user's own department
+// must match, or they're admin/management (mirrors accessPolicy's rules).
+export function RequireDepartment({ children }) {
+  const { user } = useAuth()
+  const { state } = useHospital()
+  const { code } = useParams()
+  const location = useLocation()
+  if (!user) return <Navigate to="/login" replace />
+  const isManager = user.role === 'admin' || user.role === 'management'
+  const authorized = isManager || userDepartmentCode(user, state) === code
+  if (!authorized) {
+    return (
+      <AccessRestricted
+        path={location.pathname}
+        message="Your department doesn't have access to this hub. If you believe this is a mistake, contact your system administrator."
+      />
     )
   }
   return children
