@@ -4,6 +4,7 @@ import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
 import { departmentOptions } from '../config/departmentUtils'
+import { scopeFilter } from '../services/accessPolicy'
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
@@ -31,6 +32,7 @@ export default function Appointments() {
 
   const filtered = useMemo(() => {
     return state.appointments
+      .filter(scopeFilter(user, state, 'appointments'))
       .filter((a) => {
         const q = query.toLowerCase()
         const matchQ = !q || patientName(a.patientId).toLowerCase().includes(q) || a.reason.toLowerCase().includes(q)
@@ -39,7 +41,7 @@ export default function Appointments() {
         return matchQ && matchS && matchD
       })
       .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
-  }, [state.appointments, query, statusFilter, dateFilter, patientName])
+  }, [state, user, query, statusFilter, dateFilter, patientName])
 
   const blank = {
     patientId: state.patients[0]?.id || '',

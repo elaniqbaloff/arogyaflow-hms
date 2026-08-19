@@ -12,6 +12,7 @@ import { AUDIT_SEVERITY } from '../services/workflow'
 import {
   isAyurvedaDepartment, getMandatoryFields,
 } from '../config/consultationTemplates'
+import { scopeFilter } from '../services/accessPolicy'
 
 export default function Consultations() {
   const { state, add, update, logAudit } = useHospital()
@@ -26,10 +27,11 @@ export default function Consultations() {
 
   const list = useMemo(() => {
     return state.consultations
+      .filter(scopeFilter(user, state, 'consultations'))
       .filter((c) => (tab === 'all' ? true : c.status === tab))
       .filter((c) => !query || patientName(c.patientId).toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => b.date.localeCompare(a.date))
-  }, [state.consultations, tab, query, patientName])
+  }, [state, user, tab, query, patientName])
 
   const blank = {
     patientId: state.patients[0]?.id || '', doctorId: user.id, appointmentId: null, episodeId: null,
@@ -114,9 +116,10 @@ export default function Consultations() {
     toast(`Consultation for ${patientName(c.patientId)} marked complete.`)
   }
 
+  const scopedConsultations = state.consultations.filter(scopeFilter(user, state, 'consultations'))
   const counts = {
-    pending: state.consultations.filter((c) => c.status === 'pending').length,
-    completed: state.consultations.filter((c) => c.status === 'completed').length,
+    pending: scopedConsultations.filter((c) => c.status === 'pending').length,
+    completed: scopedConsultations.filter((c) => c.status === 'completed').length,
   }
 
   return (
@@ -218,11 +221,19 @@ export default function Consultations() {
 // ─────────────────────────────────────────────────────────────
 function ConsultationForm({ form, setForm, state, departmentForPatient }) {
   const { state: hState } = useHospital()
+  const { user } = useAuth()
   const { episodesFor } = useLookups()
   const d = form.data
   const patient = state.patients.find((p) => p.id === d.patientId)
   const department = departmentForPatient(d.patientId)
   const ayurveda = isAyurvedaDepartment(department)
+  // Same scope a consultation record for this patient would be visible
+  // under, applied to the picker so a doctor can't start a note for a
+  // patient they wouldn't be allowed to see afterward.
+  const pickablePatients = useMemo(
+    () => state.patients.filter((p) => scopeFilter(user, state, 'consultations')({ patientId: p.id })),
+    [state, user]
+  )
 
   const setField = (key, value) => setForm({ ...form, data: { ...d, [key]: value } })
   const setNested = (key, subKey, value) => setForm({ ...form, data: { ...d, [key]: { ...(d[key] || {}), [subKey]: value } } })
@@ -246,7 +257,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Patient" required>
           <Select value={d.patientId} onChange={(e) => setField('patientId', e.target.value)}>
-            {state.patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {pickablePatients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
         </Field>
         <Field label="Date">

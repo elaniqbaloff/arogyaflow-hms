@@ -24,6 +24,22 @@ export const MODULES = {
   settings: 'settings',
 }
 
+// Capabilities shared by dentist/physiotherapist — doctor's clinical set
+// minus the IPD/therapy capabilities neither role has a module for.
+const ALLIED_CLINICAL_CAPABILITIES = [
+  'patients.read', 'patients.update', 'patients.convert',
+  'appointments.read', 'appointments.update',
+  'consultations.create', 'consultations.read', 'consultations.update',
+  'prescriptions.create',
+  'nursing.read',
+  'lab.create', 'lab.read',
+  'billing.read',
+  'tasks.read',
+  'tasks.update',
+  'approvals.read',
+  'approvals.request',
+]
+
 // '*' capability => everything (admin).
 export const ROLES = {
   admin: {
@@ -32,6 +48,7 @@ export const ROLES = {
     accent: '#21664c',
     modules: Object.values(MODULES),
     capabilities: ['*'],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'all' },
     landing: '/dashboard',
   },
   management: {
@@ -48,6 +65,7 @@ export const ROLES = {
       'approvals.decide',
       'audit.read',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'all' },
     landing: '/dashboard',
   },
   doctor: {
@@ -70,6 +88,28 @@ export const ROLES = {
       'approvals.read',
       'approvals.request',
     ],
+    // Patients/appointments stay 'all' (unchanged, unrestricted, matching every
+    // other clinical role) — only consultations narrows to the doctor's own
+    // department, closing the cross-department consultation-notes leak.
+    scopes: { patients: 'all', appointments: 'all', consultations: 'department', tasks: 'department' },
+    landing: '/consultations',
+  },
+  dentist: {
+    label: 'Dentist',
+    blurb: 'Dental patient records, appointments and consultations.',
+    accent: '#0284c7',
+    modules: ['dashboard', 'patients', 'appointments', 'consultations', 'tasks'],
+    capabilities: ALLIED_CLINICAL_CAPABILITIES,
+    scopes: { patients: 'department', appointments: 'department', consultations: 'department', tasks: 'department' },
+    landing: '/consultations',
+  },
+  physiotherapist: {
+    label: 'Physiotherapist',
+    blurb: 'Physiotherapy patient records, appointments and consultations.',
+    accent: '#c08f2b',
+    modules: ['dashboard', 'patients', 'appointments', 'consultations', 'tasks'],
+    capabilities: ALLIED_CLINICAL_CAPABILITIES,
+    scopes: { patients: 'department', appointments: 'department', consultations: 'department', tasks: 'department' },
     landing: '/consultations',
   },
   nurse: {
@@ -87,6 +127,7 @@ export const ROLES = {
       'tasks.read',
       'tasks.update',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/nursing',
   },
   reception: {
@@ -103,6 +144,7 @@ export const ROLES = {
       'tasks.update',
       'approvals.request',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/patients',
   },
   pharmacy: {
@@ -116,6 +158,7 @@ export const ROLES = {
       'tasks.read',
       'tasks.update',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/pharmacy',
   },
   lab: {
@@ -127,6 +170,7 @@ export const ROLES = {
       'tasks.read',
       'tasks.update',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/lab',
   },
   finance: {
@@ -146,6 +190,7 @@ export const ROLES = {
       'audit.read',
       'pricing.update',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/billing',
   },
   it: {
@@ -160,6 +205,7 @@ export const ROLES = {
       'audit.read',
       'demo.manage',
     ],
+    scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/settings',
   },
 }

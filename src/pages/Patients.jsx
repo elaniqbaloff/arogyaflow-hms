@@ -10,6 +10,7 @@ import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
 import { departmentOptions } from '../config/departmentUtils'
+import { scopeFilter } from '../services/accessPolicy'
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
@@ -143,7 +144,7 @@ export default function Patients() {
   }
 
   const filtered = useMemo(() => {
-    return state.patients.filter((p) => {
+    return state.patients.filter(scopeFilter(user, state, 'patients')).filter((p) => {
       const q = query.toLowerCase()
       const matchArchived = showArchived || p.status !== 'archived'
       const matchQ = !q || p.name.toLowerCase().includes(q) || (p.nameAr || '').includes(query) || p.mrn.toLowerCase().includes(q) || (p.phone || '').includes(q)
@@ -151,9 +152,12 @@ export default function Patients() {
       const matchT = typeFilter === 'all' || patientType(p) === typeFilter
       return matchArchived && matchQ && matchD && matchT
     })
-  }, [state.patients, state.episodes, query, deptFilter, typeFilter, showArchived])
+  }, [state, user, query, deptFilter, typeFilter, showArchived])
 
-  const activeCount = useMemo(() => state.patients.filter((p) => p.status !== 'archived').length, [state.patients])
+  const activeCount = useMemo(
+    () => state.patients.filter(scopeFilter(user, state, 'patients')).filter((p) => p.status !== 'archived').length,
+    [state, user]
+  )
 
   const openAdd = () => setForm({ mode: 'add', data: blankPatient(), dupes: null })
   const openEdit = (p) => setForm({ mode: 'edit', data: withDefaults(p), dupes: null })

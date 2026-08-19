@@ -46,6 +46,8 @@ export const users = [
   { id: 'usr_lab', name: 'Divya Raj', email: 'lab@palikutty.in', role: 'lab', department: 'Diagnostics', password: 'lab123', status: 'active' },
   { id: 'usr_fin', name: 'George Mathew', email: 'finance@palikutty.in', role: 'finance', department: 'Finance', password: 'finance123', status: 'active' },
   { id: 'usr_it', name: 'Arun Nambiar', email: 'it@palikutty.in', role: 'it', department: 'IT', password: 'it123', status: 'active' },
+  { id: 'usr_dentist', name: 'Dr. Naseem Ali', email: 'dentist@palikutty.in', role: 'dentist', department: 'Dental', password: 'dentist123', status: 'active' },
+  { id: 'usr_physio', name: 'Dr. Vishnu Prasad', email: 'physio@palikutty.in', role: 'physiotherapist', department: 'Physiotherapy', password: 'physio123', status: 'active' },
 ]
 
 export const doctors = [
