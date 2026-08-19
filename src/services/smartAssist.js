@@ -26,6 +26,7 @@ export const FIELD_BINDINGS = {
   procedurePerformed: ['dental-procedure'],
   postOpInstructions: ['advice-template'],
   nextVisitPlan: ['advice-template'],
+  dentalPhase: ['dental-procedure'],
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

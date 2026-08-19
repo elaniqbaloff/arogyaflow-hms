@@ -155,22 +155,36 @@ const AYURVEDA_CONCEPTS = [
   ['ct_con_ojas', 'Ojas', 'vital essence/immunity'],
 ].map(([id, t, phrase]) => term(id, t, 'ayurveda-concept', ['AYUR', 'PANCH'], { relatedPhrases: [phrase] }))
 
-// ── Dental — general vocabulary (~7) ──
+// ── Dental — general vocabulary (~11) — surface/notation terms (§9.12
+//    "tooth-notation snippets") pair with the tooth already picked via
+//    ToothPicker elsewhere in the form, so they stay tooth-number-free here.
 const DENTAL_TERMS = [
   'Cavity', 'Plaque', 'Gingivitis', 'Periodontitis', 'Dental Abscess', 'Malocclusion', 'Dentin Hypersensitivity',
+  'Mesial Caries', 'Distal Caries', 'Occlusal Caries', 'Recurrent Caries',
 ].map((t, i) => term(`ct_dent_term_${i}`, t, 'dental-term', ['DENT']))
 
-// ── Dental procedures (~8) ──
+// ── Dental procedures (~17) — includes the three named RCT phases
+//    (access/instrumentation, obturation, restoration) the RCT order set
+//    (SA-P3, ProcedurePlanPanel) prefills, and crown/implant sub-types.
 const DENTAL_PROCEDURES = [
   ['ct_dent_rct', 'Root Canal Treatment', ['RCT']],
-  ['ct_dent_extraction', 'Tooth Extraction', []],
+  ['ct_dent_extraction', 'Tooth Extraction', [], ['Extraction under LA']],
   ['ct_dent_scaling', 'Scaling and Polishing', []],
   ['ct_dent_filling', 'Composite Filling', []],
+  ['ct_dent_gic_filling', 'GIC Filling', ['GIC'], ['Glass Ionomer Filling']],
   ['ct_dent_crown', 'Dental Crown', []],
+  ['ct_dent_crown_pfm', 'PFM Crown', ['PFM']],
+  ['ct_dent_crown_zirconia', 'Zirconia Crown', []],
+  ['ct_dent_crown_ceramic', 'Ceramic Crown', []],
   ['ct_dent_implant', 'Dental Implant', []],
+  ['ct_dent_implant_stage1', 'Implant Placement (Stage 1)', []],
+  ['ct_dent_implant_stage2', 'Implant Restoration (Stage 2)', []],
   ['ct_dent_whitening', 'Teeth Whitening', []],
   ['ct_dent_denture', 'Denture Fitting', []],
-].map(([id, t, abbreviations]) => term(id, t, 'dental-procedure', ['DENT'], { abbreviations }))
+  ['ct_dent_rct_access', 'Access & Instrumentation', []],
+  ['ct_dent_rct_obturation', 'Obturation', []],
+  ['ct_dent_rct_restoration', 'Post-Endodontic Restoration', []],
+].map(([id, t, abbreviations, aliases]) => term(id, t, 'dental-procedure', ['DENT'], { abbreviations, aliases }))
 
 // ── Physio terms (~7) ──
 const PHYSIO_TERMS = [

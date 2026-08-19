@@ -19,6 +19,7 @@
 
 import { uid, today } from '../lib/utils'
 import { buildAudit, buildTask } from './workflow'
+import { ORDER_SETS } from '../data/orderSets'
 
 // Generic CRUD factory bound to a collection name.
 function crud(collection, prim) {
@@ -259,6 +260,34 @@ export function buildRepositories(prim) {
       }
 
       return { ok: true, item }
+    },
+
+    // Smart Assist order set (SA-P3, §9.12): prefills several items in one
+    // dispatch (same single-update discipline as completeItem above — read
+    // pricing/plan once, build every item from that snapshot, one prim.update).
+    // Items land as 'proposed', same as manually adding them one at a time —
+    // the dentist still reviews, price-checks, and confirms (accepts) each.
+    applyOrderSet: (planId, orderSetKey, { tooth, consultationId } = {}, user) => {
+      const orderSet = ORDER_SETS[orderSetKey]
+      if (!orderSet) return { ok: false, reason: 'unknown-order-set' }
+      const plan = base.procedurePlans.byId(planId)
+      if (!plan) return { ok: false, reason: 'not-found' }
+      const pricing = prim.getState().pricing || []
+      const now = new Date().toISOString()
+
+      const newItems = orderSet.items.map((spec) => {
+        const price = pricing.find((p) => p.code === spec.priceCode)
+        return {
+          id: uid('ppli'), tooth: tooth || null, priceId: price?.id || null,
+          procedureName: price?.name || spec.priceCode, phase: spec.phase, status: 'proposed',
+          estAmount: price?.amount || 0, consultationId: consultationId || null,
+          acceptedAt: null, startedAt: null, completedAt: null, billableItemId: null,
+        }
+      })
+
+      prim.update('procedurePlans', planId, { items: [...plan.items, ...newItems], updatedAt: now })
+      planAudit(user, 'procedurePlan.orderSet.applied', plan, null, orderSetKey, `${orderSet.label}${tooth ? ` — tooth ${tooth}` : ''}`)
+      return { ok: true, items: newItems }
     },
 
     // Plan-level, not per-item (§9.6): print → sign on paper → this marks

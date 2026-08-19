@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
-import { ClipboardPlus, Plus, Check, Play, X, FileSignature, FileImage } from 'lucide-react'
+import { ClipboardPlus, Plus, Check, Play, X, FileSignature, FileImage, Sparkles } from 'lucide-react'
 import { useHospital } from '../../store/HospitalContext'
 import { useAuth } from '../../store/AuthContext'
 import { can } from '../../config/roles'
 import { useToast } from '../ui/Toast'
 import { Badge, Select, Input, EmptyState } from '../ui/primitives'
+import { SmartField } from '../ui/SmartField'
 import { ALL_FDI_TEETH } from '../ui/ToothPicker'
 import { inr, uid, formatDate, today } from '../../lib/utils'
 import { printConsentForm } from '../../lib/printDocument'
+import { ORDER_SETS } from '../../data/orderSets'
 
 const ATTACHMENT_TYPES = [
   { value: 'xray', label: 'X-ray' },
@@ -40,6 +42,7 @@ export function ProcedurePlanPanel({ dept }) {
   )
   const [patientId, setPatientId] = useState(deptPatients[0]?.id || '')
   const [addingFor, setAddingFor] = useState(null)
+  const [orderSetFor, setOrderSetFor] = useState(null)
 
   // Read the render list straight from context state, not through
   // repos.procedurePlans — repos reads via a ref that HospitalContext only
@@ -79,6 +82,13 @@ export function ProcedurePlanPanel({ dept }) {
     toast('Consent recorded as signed.')
   }
 
+  const applyOrderSet = (planId, orderSetKey, tooth, consultationId) => {
+    const result = repos.procedurePlans.applyOrderSet(planId, orderSetKey, { tooth, consultationId }, user)
+    if (!result.ok) { toast(`Couldn't apply order set (${result.reason}).`, 'error'); return }
+    toast(`${ORDER_SETS[orderSetKey]?.label || 'Order set'} applied — review and accept each item.`)
+    setOrderSetFor(null)
+  }
+
   if (deptPatients.length === 0) return null
 
   return (
@@ -111,10 +121,13 @@ export function ProcedurePlanPanel({ dept }) {
                 canManage={canManage}
                 dentalPricing={dentalPricing}
                 adding={addingFor === plan.id}
-                onAddItem={() => setAddingFor(plan.id)}
+                onAddItem={() => { setAddingFor(plan.id); setOrderSetFor(null) }}
                 onCancelAdd={() => setAddingFor(null)}
                 onDoVerb={doVerb}
                 onSignConsent={signConsent}
+                orderSetOpen={orderSetFor === plan.id}
+                onToggleOrderSet={() => { setOrderSetFor(orderSetFor === plan.id ? null : plan.id); setAddingFor(null) }}
+                onApplyOrderSet={applyOrderSet}
               />
             ))
           )}
@@ -201,10 +214,14 @@ function AttachmentsSection({ patient, canManage }) {
   )
 }
 
-function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem, onCancelAdd, onDoVerb, onSignConsent }) {
+function PlanCard({
+  plan, patientId, canManage, dentalPricing, adding, onAddItem, onCancelAdd, onDoVerb, onSignConsent,
+  orderSetOpen, onToggleOrderSet, onApplyOrderSet,
+}) {
   const { state, repos } = useHospital()
   const toast = useToast()
   const [draft, setDraft] = useState({ tooth: '', priceId: dentalPricing[0]?.id || '', phase: '', estAmount: dentalPricing[0]?.amount || 0 })
+  const [orderSetTooth, setOrderSetTooth] = useState('')
 
   const patient = state.patients.find((p) => p.id === patientId)
 
@@ -312,16 +329,47 @@ function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem
           >
             {dentalPricing.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          <Input placeholder="Phase (optional)" value={draft.phase} onChange={(e) => setDraft({ ...draft, phase: e.target.value })} />
+          <SmartField
+            fieldKey="dentalPhase" departmentCode="DENT" recordId={plan.id}
+            value={draft.phase} onChange={(e) => setDraft({ ...draft, phase: e.target.value })}
+            placeholder="Phase (optional) — e.g. Access & Instrumentation"
+          />
           <Input type="number" value={draft.estAmount} onChange={(e) => setDraft({ ...draft, estAmount: e.target.value })} />
           <div className="col-span-2 flex gap-2 sm:col-span-5">
             <button className="btn-primary btn-sm" onClick={saveItem}>Add item</button>
             <button className="btn-outline btn-sm" onClick={onCancelAdd}>Cancel</button>
           </div>
         </div>
+      ) : orderSetOpen ? (
+        <div className="flex flex-wrap items-end gap-2 border-t border-sand bg-gold-50/40 p-3">
+          <div className="min-w-[220px] flex-1 text-xs text-ink/60">
+            <p className="font-medium text-brand-900">{ORDER_SETS.rctToCrown.label}</p>
+            <p className="mt-0.5">{ORDER_SETS.rctToCrown.description} Adds {ORDER_SETS.rctToCrown.items.length} items as <em>proposed</em> — nothing is billed until you accept, start and complete each one.</p>
+          </div>
+          <Select value={orderSetTooth} onChange={(e) => setOrderSetTooth(e.target.value)} className="w-auto">
+            <option value="">Tooth…</option>
+            {ALL_FDI_TEETH.map((n) => <option key={n} value={n}>{n}</option>)}
+          </Select>
+          <button
+            className="btn-primary btn-sm"
+            onClick={() => {
+              if (!orderSetTooth) { toast('Pick the tooth this plan applies to.', 'error'); return }
+              onApplyOrderSet(plan.id, 'rctToCrown', orderSetTooth, latestConsultation?.id)
+              setOrderSetTooth('')
+            }}
+          >
+            Apply
+          </button>
+          <button className="btn-outline btn-sm" onClick={onToggleOrderSet}>Cancel</button>
+        </div>
       ) : (
-        <div className="border-t border-sand p-2">
+        <div className="flex items-center gap-1 border-t border-sand p-2">
           <button className="btn-ghost btn-sm" onClick={onAddItem}><Plus size={14} /> Add item</button>
+          {canManage && (
+            <button className="btn-ghost btn-sm text-gold-700" onClick={onToggleOrderSet}>
+              <Sparkles size={14} /> Use RCT order set
+            </button>
+          )}
         </div>
       ))}
     </div>
