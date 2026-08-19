@@ -13,6 +13,13 @@ const DECIDUOUS_UPPER_RIGHT = [61, 62, 63, 64, 65]
 const DECIDUOUS_LOWER_LEFT = [85, 84, 83, 82, 81]
 const DECIDUOUS_LOWER_RIGHT = [71, 72, 73, 74, 75]
 
+// Every valid FDI tooth number, ascending — for pickers that just need a
+// single-tooth dropdown rather than the full chart (e.g. one plan item).
+export const ALL_FDI_TEETH = [
+  ...PERM_UPPER_LEFT, ...PERM_UPPER_RIGHT, ...PERM_LOWER_LEFT, ...PERM_LOWER_RIGHT,
+  ...DECIDUOUS_UPPER_LEFT, ...DECIDUOUS_UPPER_RIGHT, ...DECIDUOUS_LOWER_LEFT, ...DECIDUOUS_LOWER_RIGHT,
+].sort((a, b) => a - b)
+
 // Multi-select FDI tooth-number picker. `value` is an array of tooth-number
 // strings; selection persists across the permanent/deciduous toggle so mixed
 // dentition (a child with both adult and baby teeth involved) can be recorded.

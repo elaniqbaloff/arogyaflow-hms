@@ -9,6 +9,7 @@ import { departmentIcon } from '../config/departmentIcons'
 import { canSeeTask } from '../services/taskPolicy'
 import { PageHeader, StatCard, Badge, EmptyState } from '../components/ui/primitives'
 import { TaskTable } from '../components/TaskTable'
+import { ProcedurePlanPanel } from '../components/dental/ProcedurePlanPanel'
 import { today } from '../lib/utils'
 
 export default function DepartmentHub() {
@@ -61,6 +62,8 @@ export default function DepartmentHub() {
         <StatCard label="My open tasks" value={counts.myOpen} icon={Bell} tone="sky" />
         <StatCard label="Open tasks total" value={counts.openTotal} icon={ListChecks} tone="brand" />
       </div>
+
+      {dept.code === 'DENT' && <ProcedurePlanPanel dept={dept} />}
 
       <div className="mb-6 card overflow-hidden">
         <div className="border-b border-sand p-4">

@@ -18,7 +18,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { uid, today } from '../lib/utils'
-import { buildAudit } from './workflow'
+import { buildAudit, buildTask } from './workflow'
 
 // Generic CRUD factory bound to a collection name.
 function crud(collection, prim) {
@@ -55,6 +55,7 @@ export function buildRepositories(prim) {
     users: crud('users', prim),
     pricing: crud('pricing', prim),
     billableItems: crud('billableItems', prim),
+    procedurePlans: crud('procedurePlans', prim),
     tasks: crud('tasks', prim),
     approvals: crud('approvals', prim),
     audit: crud('audit', prim),
@@ -172,6 +173,91 @@ export function buildRepositories(prim) {
         `${task.assignedDepartment || ''}/${task.assignedRole || ''}`,
         `${changes.assignedDepartment || task.assignedDepartment || ''}/${changes.assignedRole || task.assignedRole || ''}`)
       return { ok: true }
+    },
+  }
+
+  // Records an audit row for a procedure-plan item verb, same shape logAudit uses.
+  const planAudit = (user, action, plan, oldValue, newValue, remarks) => {
+    prim.add('audit', buildAudit({
+      user, action, module: 'procedurePlans', recordId: plan.id, mrn: plan.mrn,
+      oldValue: oldValue ?? null, newValue: newValue ?? null, remarks: remarks || '',
+    }))
+  }
+
+  // Item status is a one-way state machine — no ownership/claim concept
+  // (a plan belongs to whichever clinician is managing that patient, gated
+  // by capability, not per-item locking) but every verb still self-guards
+  // the transition and returns {ok, reason?}, matching the tasks pattern.
+  const ITEM_TRANSITIONS = {
+    proposed: ['accepted', 'cancelled'],
+    accepted: ['in-progress', 'cancelled'],
+    'in-progress': ['completed', 'cancelled'],
+    completed: [],
+    cancelled: [],
+  }
+
+  // `deriveItem`, when given, lets a verb fold extra per-item changes (e.g.
+  // completeItem's billableItemId) into the SAME dispatch as the status
+  // transition — chaining a second prim.update after the first would read
+  // stale pre-transition data back out of prim.getState()'s ref (it only
+  // syncs after React commits), silently clobbering the transition.
+  const transitionItem = (planId, itemId, toStatus, user, { extra = {}, deriveItem } = {}) => {
+    const plan = base.procedurePlans.byId(planId)
+    if (!plan) return { ok: false, reason: 'not-found' }
+    const item = (plan.items || []).find((i) => i.id === itemId)
+    if (!item) return { ok: false, reason: 'item-not-found' }
+    if (!(ITEM_TRANSITIONS[item.status] || []).includes(toStatus)) return { ok: false, reason: 'invalid-status' }
+    const now = new Date().toISOString()
+    let nextItem = { ...item, ...extra, status: toStatus }
+    if (deriveItem) nextItem = deriveItem(nextItem)
+    const items = plan.items.map((i) => (i.id === itemId ? nextItem : i))
+    prim.update('procedurePlans', planId, { items, updatedAt: now })
+    planAudit(user, `procedurePlan.item.${toStatus}`, plan, item.status, toStatus, extra.reason)
+    return { ok: true, item: nextItem, plan }
+  }
+
+  base.procedurePlans = {
+    ...base.procedurePlans,
+
+    acceptItem: (planId, itemId, user) =>
+      transitionItem(planId, itemId, 'accepted', user, { extra: { acceptedAt: new Date().toISOString() } }),
+
+    startItem: (planId, itemId, user) =>
+      transitionItem(planId, itemId, 'in-progress', user, { extra: { startedAt: new Date().toISOString() } }),
+
+    cancelItem: (planId, itemId, user, reason) =>
+      transitionItem(planId, itemId, 'cancelled', user, { extra: { reason } }),
+
+    // Completing an item auto-creates a pending billable item (§9.3) and,
+    // if the item's sourcing consultation named a next-visit plan, raises a
+    // dental-followup task carrying that plan as its notes (§9.8).
+    completeItem: (planId, itemId, user) => {
+      const billableItemId = uid('bi')
+      const result = transitionItem(planId, itemId, 'completed', user, {
+        extra: { completedAt: new Date().toISOString() },
+        deriveItem: (item) => ({ ...item, billableItemId }),
+      })
+      if (!result.ok) return result
+      const { item, plan } = result
+
+      prim.add('billableItems', {
+        id: billableItemId, mrn: plan.mrn, patientId: plan.patientId, episodeId: null,
+        department: 'Dental', desc: item.procedureName || 'Dental procedure',
+        priceId: item.priceId || null, amount: item.estAmount || 0,
+        status: 'pending', createdAt: new Date().toISOString(), source: 'dental-procedure',
+      })
+
+      const consultation = item.consultationId
+        ? (prim.getState().consultations || []).find((c) => c.id === item.consultationId)
+        : null
+      if (consultation?.nextVisitPlan?.trim()) {
+        prim.add('tasks', buildTask({
+          type: 'dental-followup', mrn: plan.mrn, sourceRole: user?.role, createdBy: user?.name || 'System',
+          relatedId: plan.id, notes: consultation.nextVisitPlan,
+        }))
+      }
+
+      return { ok: true, item }
     },
   }
 

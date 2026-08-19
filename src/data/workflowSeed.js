@@ -19,12 +19,44 @@ export const pricing = [
   { id: 'prc_lab_hba1c', code: 'LAB-HBA1C', name: 'HbA1c test', department: 'Diagnostics', amount: 450, taxable: true },
   { id: 'prc_lab_lipid', code: 'LAB-LIPID', name: 'Lipid profile', department: 'Diagnostics', amount: 650, taxable: true },
   { id: 'prc_nursing', code: 'IPD-NURS', name: 'Nursing care / day', department: 'IPD', amount: 300, taxable: true },
+  // ALIDS dental procedure catalog (§9.7) — prc_opd_dental above covers the
+  // checkup; these cover the rest of the public service list.
+  { id: 'prc_dent_cleaning', code: 'DENT-CLEAN', name: 'Scaling & polishing (cleaning)', department: 'Dental', amount: 800, taxable: true },
+  { id: 'prc_dent_filling', code: 'DENT-FILL', name: 'Composite filling', department: 'Dental', amount: 1200, taxable: true },
+  { id: 'prc_dent_rct', code: 'DENT-RCT', name: 'Root canal treatment', department: 'Dental', amount: 6000, taxable: true },
+  { id: 'prc_dent_extraction', code: 'DENT-EXT', name: 'Tooth extraction (simple)', department: 'Dental', amount: 1000, taxable: true },
+  { id: 'prc_dent_crown', code: 'DENT-CROWN', name: 'Crown (PFM)', department: 'Dental', amount: 5000, taxable: true },
+  { id: 'prc_dent_bridge', code: 'DENT-BRIDGE', name: 'Bridge (per unit)', department: 'Dental', amount: 5500, taxable: true },
+  { id: 'prc_dent_implant', code: 'DENT-IMPLANT', name: 'Dental implant', department: 'Dental', amount: 25000, taxable: true },
+  { id: 'prc_dent_whitening', code: 'DENT-WHITEN', name: 'Teeth whitening', department: 'Dental', amount: 3500, taxable: true },
 ]
 
 // Pending billable items — services rendered, not yet on a final invoice.
 export const billableItems = [
   { id: 'bi_1', mrn: 'MRN-0007', patientId: 'pat_7', episodeId: 'ep_7b', department: 'Panchakarma', desc: 'Kati Basti', priceId: 'prc_pk_kizhi', amount: 2000, status: 'pending', createdAt: daysFromNow(0), source: 'therapy' },
   { id: 'bi_2', mrn: 'MRN-0004', patientId: 'pat_4', episodeId: 'ep_4b', department: 'IPD', desc: 'Nursing care (1 day)', priceId: 'prc_nursing', amount: 300, status: 'pending', createdAt: daysFromNow(0), source: 'nursing' },
+]
+
+// Dental procedure plans (§9.3) — a phased treatment plan per patient.
+// Joseph Varghese (pat_6 / MRN-0006) is mid-treatment: RCT accepted and
+// ready to start, crown proposed for once the canal work is done.
+export const procedurePlans = [
+  {
+    id: 'ppl_1', patientId: 'pat_6', mrn: 'MRN-0006', department: 'DENT',
+    items: [
+      {
+        id: 'ppli_1', tooth: '26', priceId: 'prc_dent_rct', procedureName: 'Root canal treatment',
+        phase: 'Access & instrumentation', status: 'accepted', estAmount: 6000, consultationId: null,
+        acceptedAt: daysFromNow(-1), startedAt: null, completedAt: null, billableItemId: null,
+      },
+      {
+        id: 'ppli_2', tooth: '26', priceId: 'prc_dent_crown', procedureName: 'Crown (PFM)',
+        phase: 'Restoration', status: 'proposed', estAmount: 5000, consultationId: null,
+        acceptedAt: null, startedAt: null, completedAt: null, billableItemId: null,
+      },
+    ],
+    consentStatus: 'pending', createdBy: 'Dr. Naseem Ali', createdAt: daysFromNow(-1), updatedAt: daysFromNow(-1),
+  },
 ]
 
 export const tasks = [

@@ -19,4 +19,5 @@ export const STATUS_TONES = {
   scheduled: 'sky', completed: 'green', cancelled: 'rose', pending: 'gold',
   paid: 'green', partial: 'gold', dispensed: 'green', active: 'green',
   disabled: 'slate', requested: 'gold', 'in-progress': 'sky',
+  proposed: 'gold', accepted: 'sky',
 }
