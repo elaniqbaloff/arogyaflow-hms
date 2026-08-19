@@ -13,6 +13,7 @@ import { useHospital, useLookups } from '../store/HospitalContext'
 import { PageHeader, StatCard, Badge } from '../components/ui/primitives'
 import { inr, today, formatDate } from '../lib/utils'
 import { roleLabel } from '../config/roles'
+import { scopeFilter } from '../services/accessPolicy'
 
 const GREENS = ['#21664c', '#2f8060', '#4e9d78', '#7dbd9d', '#d8a73e', '#c08f2b']
 
@@ -23,7 +24,11 @@ export default function Dashboard() {
 
   const m = useMemo(() => {
     const todayStr = today()
-    const todays = state.appointments.filter((a) => a.date === todayStr)
+    const scopedPatients = state.patients.filter(scopeFilter(user, state, 'patients'))
+    const scopedAppointments = state.appointments.filter(scopeFilter(user, state, 'appointments'))
+    const scopedConsultations = state.consultations.filter(scopeFilter(user, state, 'consultations'))
+
+    const todays = scopedAppointments.filter((a) => a.date === todayStr)
     const revenue = state.bills.reduce((s, b) => s + (b.paidAmount || 0), 0)
     const pendingDues = state.bills.reduce(
       (s, b) => s + (b.total - (b.paidAmount || 0)),
@@ -32,7 +37,7 @@ export default function Dashboard() {
     const lowStock = state.medicines.filter((x) => x.stock <= x.reorderLevel)
     const pendingRx = state.prescriptions.filter((p) => p.status === 'pending')
     const pendingLab = state.labTests.filter((t) => t.status !== 'completed')
-    const pendingCons = state.consultations.filter((c) => c.status === 'pending')
+    const pendingCons = scopedConsultations.filter((c) => c.status === 'pending')
 
     // revenue by department
     const byDept = {}
@@ -43,7 +48,7 @@ export default function Dashboard() {
 
     // appointment status split
     const statusCount = {}
-    state.appointments.forEach((a) => {
+    scopedAppointments.forEach((a) => {
       statusCount[a.status] = (statusCount[a.status] || 0) + 1
     })
     const statusData = Object.entries(statusCount).map(([name, value]) => ({ name, value }))
@@ -56,18 +61,19 @@ export default function Dashboard() {
     const todaysTherapy = state.therapies.filter((t) => t.date === todayStr)
 
     return {
+      totalPatients: scopedPatients.length,
       todays, revenue, pendingDues, lowStock, pendingRx, pendingLab, pendingCons,
       deptData, statusData,
       activeIpd, conversions, availableBeds, occupiedBeds, todaysTherapy,
     }
-  }, [state])
+  }, [state, user])
 
   const greeting = `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}`
 
   // Pick KPI set by role.
   const role = user.role
   const showFinance = ['admin', 'management', 'finance'].includes(role)
-  const showClinical = ['admin', 'management', 'doctor', 'reception'].includes(role)
+  const showClinical = ['admin', 'management', 'doctor', 'reception', 'dentist', 'physiotherapist'].includes(role)
   const showPharmacy = ['admin', 'management', 'pharmacy'].includes(role)
   const showLab = ['admin', 'management', 'lab'].includes(role)
   const showIpd = ['admin', 'management', 'doctor', 'nurse', 'reception'].includes(role)
@@ -85,11 +91,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {showClinical && (
           <>
-            <StatCard label="Total Patients" value={state.patients.length} icon={Users} sub="Registered in system" />
+            <StatCard label="Total Patients" value={m.totalPatients} icon={Users} sub="Registered in system" />
             <StatCard label="Today's Appointments" value={m.todays.length} icon={CalendarDays} tone="sky" sub={`${m.todays.filter((a) => a.status === 'completed').length} completed`} />
           </>
         )}
-        {(role === 'doctor' || role === 'admin' || role === 'management') && (
+        {['doctor', 'dentist', 'physiotherapist', 'admin', 'management'].includes(role) && (
           <StatCard label="Pending Consultations" value={m.pendingCons.length} icon={Stethoscope} tone="gold" sub="Awaiting notes" />
         )}
         {showPharmacy && (
