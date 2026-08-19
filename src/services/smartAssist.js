@@ -21,6 +21,11 @@ export const FIELD_BINDINGS = {
   labTestName: ['lab-test'],
   nursingNote: ['vital', 'procedure'],
   dischargeAdvice: ['discharge-template', 'advice-template'],
+  oralExamFindings: ['dental-term'],
+  dentalDiagnosis: ['dental-term'],
+  procedurePerformed: ['dental-procedure'],
+  postOpInstructions: ['advice-template'],
+  nextVisitPlan: ['advice-template'],
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

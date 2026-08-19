@@ -8,10 +8,11 @@ import {
   PageHeader, Badge, Field, Input, Select, Textarea, SearchInput, EmptyState,
 } from '../components/ui/primitives'
 import { SmartField } from '../components/ui/SmartField'
+import { ToothPicker } from '../components/ui/ToothPicker'
 import { formatDate, today, uid, flagAbnormalVitals } from '../lib/utils'
 import { AUDIT_SEVERITY } from '../services/workflow'
 import {
-  isAyurvedaDepartment, getMandatoryFields,
+  isAyurvedaDepartment, isDentalDepartment, getMandatoryFields,
 } from '../config/consultationTemplates'
 import { scopeFilter } from '../services/accessPolicy'
 
@@ -34,8 +35,18 @@ export default function Consultations() {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [state, user, tab, query, patientName])
 
+  // Same scope a consultation record would be visible under — defaulting
+  // the "New Consultation" picker to an out-of-scope patient (e.g. the
+  // hospital's very first patient, for a dentist) would silently mismatch
+  // the visible <select> value against the actual form state and render
+  // the wrong department's template.
+  const defaultPatientId = useMemo(
+    () => state.patients.find((p) => scopeFilter(user, state, 'consultations')({ patientId: p.id }))?.id || '',
+    [state, user]
+  )
+
   const blank = {
-    patientId: state.patients[0]?.id || '', doctorId: user.id, appointmentId: null, episodeId: null,
+    patientId: defaultPatientId, doctorId: user.id, appointmentId: null, episodeId: null,
     date: today(), notes: '', diagnosis: '', treatment: '', status: 'pending',
     chiefComplaint: '',
     vitalsSnapshot: null,
@@ -47,6 +58,8 @@ export default function Consultations() {
     chikitsaSutra: '', anupana: '',
     therapyAdvice: { procedures: [], notes: '' },
     pathyaApathya: { pathya: '', apathya: '' },
+    dentalComplaintTooth: [], oralExamFindings: '', dentalDiagnosis: '', procedurePerformed: '',
+    anesthesiaUsed: { used: false, agent: '' }, postOpInstructions: '', nextVisitPlan: '',
   }
 
   const departmentForPatient = (patientId) => {
@@ -59,9 +72,14 @@ export default function Consultations() {
     const dept = departmentForPatient(d.patientId)
     const mandatory = getMandatoryFields(dept)
     const missing = []
+    // Confirmation is only meaningful — and only ever shown in the form —
+    // when the patient actually has a recorded allergy; otherwise there is
+    // nothing to confirm.
+    const patient = state.patients.find((p) => p.id === d.patientId)
+    const hasAllergy = !!(patient?.allergies && patient.allergies.toLowerCase() !== 'none')
     for (const key of mandatory) {
       if (key === 'allergyConfirmed') {
-        if (!d.allergyConfirmed) missing.push('Allergy confirmation')
+        if (hasAllergy && !d.allergyConfirmed) missing.push('Allergy confirmation')
         continue
       }
       const val = d[key]
@@ -174,6 +192,13 @@ export default function Consultations() {
                         {c.pathyaApathya.apathya && <> · <span className="text-ink/50">Avoid:</span> {c.pathyaApathya.apathya}</>}
                       </p>
                     )}
+                    {c.dentalDiagnosis && (
+                      <p className="mt-0.5 text-sm text-ink/70">
+                        <span className="font-medium text-ink/50">Dental diagnosis:</span> {c.dentalDiagnosis}
+                        {c.dentalComplaintTooth?.length > 0 && <> · <span className="text-ink/50">Tooth:</span> {c.dentalComplaintTooth.join(', ')}</>}
+                      </p>
+                    )}
+                    {c.procedurePerformed && <p className="mt-0.5 text-sm text-ink/60"><span className="font-medium text-ink/50">Procedure:</span> {c.procedurePerformed}</p>}
                   </div>
                   <div className="flex items-center gap-1">
                     <button className="btn-ghost btn-sm" onClick={() => setRxFor(c)} title="Add prescription"><Pill size={15} /></button>
@@ -228,6 +253,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
   const patient = state.patients.find((p) => p.id === d.patientId)
   const department = departmentForPatient(d.patientId)
   const ayurveda = isAyurvedaDepartment(department)
+  const dental = isDentalDepartment(department)
   // Same scope a consultation record for this patient would be visible
   // under, applied to the picker so a doctor can't start a note for a
   // patient they wouldn't be allowed to see afterward.
@@ -409,6 +435,53 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
               <Textarea value={d.pathyaApathya?.apathya || ''} onChange={(e) => setNested('pathyaApathya', 'apathya', e.target.value)} placeholder="Diet/lifestyle to avoid…" />
             </Field>
           </div>
+        </div>
+      )}
+
+      {dental && (
+        <div className="space-y-4 rounded-lg border border-sky-100 bg-sky-50/40 p-3">
+          <p className="text-sm font-semibold text-sky-800">Dental Assessment</p>
+
+          <Field label="Tooth / teeth involved">
+            <ToothPicker value={d.dentalComplaintTooth || []} onChange={(next) => setField('dentalComplaintTooth', next)} />
+          </Field>
+
+          <Field label="Oral examination findings">
+            <SmartField as={Textarea} fieldKey="oralExamFindings" departmentCode={department?.code} recordId={d.id} value={d.oralExamFindings} onChange={(e) => setField('oralExamFindings', e.target.value)} placeholder="Soft tissue, caries, periodontal status…" />
+          </Field>
+
+          <Field label="Dental diagnosis" required>
+            <SmartField fieldKey="dentalDiagnosis" departmentCode={department?.code} recordId={d.id} value={d.dentalDiagnosis} onChange={(e) => setField('dentalDiagnosis', e.target.value)} placeholder="e.g. Irreversible pulpitis, 26" />
+          </Field>
+
+          <Field label="Procedure performed">
+            <SmartField fieldKey="procedurePerformed" departmentCode={department?.code} recordId={d.id} value={d.procedurePerformed} onChange={(e) => setField('procedurePerformed', e.target.value)} placeholder="e.g. Root canal treatment, access & obturation" />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Anesthesia used?">
+              <Select
+                value={d.anesthesiaUsed?.used ? 'yes' : 'no'}
+                onChange={(e) => setNested('anesthesiaUsed', 'used', e.target.value === 'yes')}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </Select>
+            </Field>
+            {d.anesthesiaUsed?.used && (
+              <Field label="Agent">
+                <Input value={d.anesthesiaUsed?.agent || ''} onChange={(e) => setNested('anesthesiaUsed', 'agent', e.target.value)} placeholder="e.g. 2% Lignocaine with adrenaline" />
+              </Field>
+            )}
+          </div>
+
+          <Field label="Post-op instructions">
+            <SmartField as={Textarea} fieldKey="postOpInstructions" departmentCode={department?.code} recordId={d.id} value={d.postOpInstructions} onChange={(e) => setField('postOpInstructions', e.target.value)} placeholder="Care advice for the patient after the procedure…" />
+          </Field>
+
+          <Field label="Next visit plan">
+            <SmartField as={Textarea} fieldKey="nextVisitPlan" departmentCode={department?.code} recordId={d.id} value={d.nextVisitPlan} onChange={(e) => setField('nextVisitPlan', e.target.value)} placeholder="Remaining phases, review interval…" />
+          </Field>
         </div>
       )}
 

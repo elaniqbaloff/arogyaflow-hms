@@ -57,17 +57,42 @@ export const MANDATORY_AYURVEDA_FIELDS = [
   // always-required field here.
 ]
 
+// Additional fields shown only for the Dental department (§9.2).
+export const DENTAL_FIELDS = [
+  'dentalComplaintTooth',
+  'oralExamFindings',
+  'dentalDiagnosis',
+  'procedurePerformed',
+  'anesthesiaUsed',
+  'postOpInstructions',
+  'nextVisitPlan',
+]
+
+// Dental's mandatory set replaces the generic diagnosis/treatment
+// requirement with the tooth-level dentalDiagnosis field — it is NOT
+// MANDATORY_COMMON_FIELDS + extras.
+export const MANDATORY_DENTAL_FIELDS = [
+  'chiefComplaint',
+  'dentalDiagnosis',
+  'allergyConfirmed',
+]
+
 // Department types treated as "Ayurveda-first" for template purposes.
 // (Legacy fallback — see templateKeyFor below.)
 export const AYURVEDA_DEPARTMENT_TYPES = ['ayurveda']
 
 // Keyed template registry. A department picks its template via
-// `consultationTemplate` ('ayurveda' | 'common' for now); more keys can be
-// added here as new department categories get their own field sets.
+// `consultationTemplate` ('ayurveda' | 'dental' | 'common' for now); more
+// keys can be added here as new department categories get their own field
+// sets.
 export const TEMPLATES = {
   ayurveda: {
     fields: [...COMMON_FIELDS, ...AYURVEDA_FIELDS],
     mandatory: [...MANDATORY_COMMON_FIELDS, ...MANDATORY_AYURVEDA_FIELDS],
+  },
+  dental: {
+    fields: [...COMMON_FIELDS, ...DENTAL_FIELDS],
+    mandatory: [...MANDATORY_DENTAL_FIELDS],
   },
   common: {
     fields: [...COMMON_FIELDS],
@@ -92,6 +117,14 @@ function templateKeyFor(department) {
  */
 export function isAyurvedaDepartment(department) {
   return templateKeyFor(department) === 'ayurveda'
+}
+
+/**
+ * Returns true if the given department object should use the
+ * Dental consultation template.
+ */
+export function isDentalDepartment(department) {
+  return templateKeyFor(department) === 'dental'
 }
 
 /**
