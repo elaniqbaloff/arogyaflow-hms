@@ -8,6 +8,7 @@ import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
   PageHeader, Badge, Field, Input, Select, Textarea, SearchInput, EmptyState,
 } from '../components/ui/primitives'
+import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, uid } from '../lib/utils'
 
 const STATUSES = ['requested', 'in-progress', 'completed']
@@ -166,8 +167,7 @@ export default function Lab() {
               </Select>
             </Field>
             <Field label="Test name" required>
-              <Input list="tests" value={form.data.testName} onChange={(e) => setForm({ ...form, data: { ...form.data, testName: e.target.value } })} />
-              <datalist id="tests">{COMMON_TESTS.map((t) => <option key={t} value={t} />)}</datalist>
+              <SmartField fieldKey="labTestName" value={form.data.testName} onChange={(e) => setForm({ ...form, data: { ...form.data, testName: e.target.value } })} />
             </Field>
             <Field label="Requested on">
               <Input type="date" value={form.data.requestedOn} onChange={(e) => setForm({ ...form, data: { ...form.data, requestedOn: e.target.value } })} />

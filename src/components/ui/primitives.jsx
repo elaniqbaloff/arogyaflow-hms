@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { Search, Inbox } from 'lucide-react'
 import { cx, initials } from '../../lib/utils'
 import { STATUS_TONES } from '../../config/statusTones'
@@ -71,12 +72,12 @@ export function Field({ label, children, required, hint }) {
   )
 }
 
-export function Input(props) {
-  return <input {...props} className={cx('input', props.className)} />
-}
-export function Textarea(props) {
-  return <textarea {...props} className={cx('input min-h-[88px] resize-y', props.className)} />
-}
+export const Input = forwardRef(function Input(props, ref) {
+  return <input ref={ref} {...props} className={cx('input', props.className)} />
+})
+export const Textarea = forwardRef(function Textarea(props, ref) {
+  return <textarea ref={ref} {...props} className={cx('input min-h-[88px] resize-y', props.className)} />
+})
 export function Select({ children, ...props }) {
   return (
     <select {...props} className={cx('input appearance-none bg-white', props.className)}>

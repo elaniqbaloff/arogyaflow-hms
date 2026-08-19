@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal'
 import {
   PageHeader, Badge, Field, Input, Select, Textarea, SearchInput, EmptyState,
 } from '../components/ui/primitives'
+import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, uid, flagAbnormalVitals } from '../lib/utils'
 import { AUDIT_SEVERITY } from '../services/workflow'
 import {
@@ -328,16 +329,16 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
       </div>
 
       <Field label="Chief complaint" required>
-        <Textarea value={d.chiefComplaint} onChange={(e) => setField('chiefComplaint', e.target.value)} placeholder="Presenting symptoms in patient's words…" />
+        <SmartField as={Textarea} fieldKey="chiefComplaint" departmentCode={department?.code} value={d.chiefComplaint} onChange={(e) => setField('chiefComplaint', e.target.value)} placeholder="Presenting symptoms in patient's words…" />
       </Field>
       <Field label="Diagnosis" required>
-        <Input value={d.diagnosis} onChange={(e) => setField('diagnosis', e.target.value)} placeholder="e.g. Lumbar spondylosis with sciatica" />
+        <SmartField fieldKey="diagnosis" departmentCode={department?.code} value={d.diagnosis} onChange={(e) => setField('diagnosis', e.target.value)} placeholder="e.g. Lumbar spondylosis with sciatica" />
       </Field>
       <Field label="Consultation notes">
-        <Textarea value={d.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="History, examination, observations…" />
+        <SmartField as={Textarea} fieldKey="notes" departmentCode={department?.code} value={d.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="History, examination, observations…" />
       </Field>
       <Field label="Treatment plan" required>
-        <Textarea value={d.treatment} onChange={(e) => setField('treatment', e.target.value)} placeholder="Therapies, advice, follow-up…" />
+        <SmartField as={Textarea} fieldKey="treatment" departmentCode={department?.code} value={d.treatment} onChange={(e) => setField('treatment', e.target.value)} placeholder="Therapies, advice, follow-up…" />
       </Field>
 
       {ayurveda && (
@@ -370,7 +371,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
           </Field>
 
           <Field label="Chikitsa Sutra (treatment principle)" required>
-            <Textarea value={d.chikitsaSutra} onChange={(e) => setField('chikitsaSutra', e.target.value)} placeholder="Overall treatment principle…" />
+            <SmartField as={Textarea} fieldKey="chikitsaSutra" departmentCode={department?.code} value={d.chikitsaSutra} onChange={(e) => setField('chikitsaSutra', e.target.value)} placeholder="Overall treatment principle…" />
           </Field>
 
           <Field label="Anupana">
@@ -379,14 +380,18 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Therapy / Panchakarma advice — procedures">
-              <Input
+              <SmartField
+                fieldKey="therapyAdvice"
+                departmentCode={department?.code}
                 value={(d.therapyAdvice?.procedures || []).join(', ')}
                 onChange={(e) => setNested('therapyAdvice', 'procedures', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
                 placeholder="e.g. Abhyanga, Ela Kizhi, Kati Basti"
               />
             </Field>
             <Field label="Therapy advice — notes">
-              <Input
+              <SmartField
+                fieldKey="followUp"
+                departmentCode={department?.code}
                 value={d.therapyAdvice?.notes || ''}
                 onChange={(e) => setNested('therapyAdvice', 'notes', e.target.value)}
                 placeholder="Protocol notes…"
