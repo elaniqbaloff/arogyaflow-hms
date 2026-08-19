@@ -9,7 +9,7 @@ import { uid } from '../lib/utils'
 const collections = [
   'patients', 'episodes', 'beds', 'appointments', 'consultations', 'prescriptions',
   'medicines', 'labTests', 'vitals', 'nursingNotes', 'therapies', 'bills', 'users',
-  'pricing', 'billableItems', 'procedurePlans', 'tasks', 'approvals', 'audit', 'snapshots',
+  'pricing', 'billableItems', 'procedurePlans', 'attachments', 'tasks', 'approvals', 'audit', 'snapshots',
 ]
 
 export function reducer(state, action) {

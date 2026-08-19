@@ -56,6 +56,7 @@ export function buildRepositories(prim) {
     pricing: crud('pricing', prim),
     billableItems: crud('billableItems', prim),
     procedurePlans: crud('procedurePlans', prim),
+    attachments: crud('attachments', prim),
     tasks: crud('tasks', prim),
     approvals: crud('approvals', prim),
     audit: crud('audit', prim),
@@ -258,6 +259,21 @@ export function buildRepositories(prim) {
       }
 
       return { ok: true, item }
+    },
+
+    // Plan-level, not per-item (§9.6): print → sign on paper → this marks
+    // the plan's consentStatus with a staff attestation + audit entry.
+    // Digital signature capture is a backend-era feature, out of scope here.
+    signConsent: (planId, user) => {
+      const plan = base.procedurePlans.byId(planId)
+      if (!plan) return { ok: false, reason: 'not-found' }
+      if (plan.consentStatus === 'signed') return { ok: false, reason: 'already-signed' }
+      const now = new Date().toISOString()
+      prim.update('procedurePlans', planId, {
+        consentStatus: 'signed', consentSignedBy: user?.name || null, consentSignedAt: now, updatedAt: now,
+      })
+      planAudit(user, 'procedurePlan.consent.signed', plan, plan.consentStatus, 'signed')
+      return { ok: true }
     },
   }
 

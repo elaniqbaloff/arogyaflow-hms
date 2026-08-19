@@ -1,12 +1,19 @@
 import { useMemo, useState } from 'react'
-import { ClipboardPlus, Plus, Check, Play, X } from 'lucide-react'
+import { ClipboardPlus, Plus, Check, Play, X, FileSignature, FileImage } from 'lucide-react'
 import { useHospital } from '../../store/HospitalContext'
 import { useAuth } from '../../store/AuthContext'
 import { can } from '../../config/roles'
 import { useToast } from '../ui/Toast'
 import { Badge, Select, Input, EmptyState } from '../ui/primitives'
 import { ALL_FDI_TEETH } from '../ui/ToothPicker'
-import { inr, uid, formatDate } from '../../lib/utils'
+import { inr, uid, formatDate, today } from '../../lib/utils'
+import { printConsentForm } from '../../lib/printDocument'
+
+const ATTACHMENT_TYPES = [
+  { value: 'xray', label: 'X-ray' },
+  { value: 'photo', label: 'Clinical photo' },
+  { value: 'document', label: 'Document' },
+]
 
 // Which action(s) a plan item's current status allows, per the lock-safe
 // state machine in repositories.js (proposed → accepted → in-progress →
@@ -66,52 +73,140 @@ export function ProcedurePlanPanel({ dept }) {
     toast(`Item ${VERB_LABELS[verb] || 'updated'}.`)
   }
 
+  const signConsent = (planId) => {
+    const result = repos.procedurePlans.signConsent(planId, user)
+    if (!result.ok) { toast(`Couldn't record consent (${result.reason}).`, 'error'); return }
+    toast('Consent recorded as signed.')
+  }
+
   if (deptPatients.length === 0) return null
+
+  return (
+    <>
+      <div className="mb-6 card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-brand-900">
+            <ClipboardPlus size={16} /> Procedure Plans
+          </h3>
+          <Select value={patientId} onChange={(e) => { setPatientId(e.target.value); setAddingFor(null) }} className="w-auto py-1.5 text-sm">
+            {deptPatients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        </div>
+
+        <div className="space-y-4 p-4">
+          {plans.length === 0 ? (
+            <EmptyState
+              title="No procedure plan yet"
+              message={canManage ? `Start a phased treatment plan for ${activePatient?.name}.` : 'No treatment plan on record for this patient.'}
+              action={canManage && (
+                <button className="btn-primary btn-sm" onClick={startPlan}><Plus size={14} /> Start Procedure Plan</button>
+              )}
+            />
+          ) : (
+            plans.map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                patientId={patientId}
+                canManage={canManage}
+                dentalPricing={dentalPricing}
+                adding={addingFor === plan.id}
+                onAddItem={() => setAddingFor(plan.id)}
+                onCancelAdd={() => setAddingFor(null)}
+                onDoVerb={doVerb}
+                onSignConsent={signConsent}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {activePatient && <AttachmentsSection patient={activePatient} canManage={canManage} />}
+    </>
+  )
+}
+
+function AttachmentsSection({ patient, canManage }) {
+  const { state, repos } = useHospital()
+  const { user } = useAuth()
+  const toast = useToast()
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState({ type: 'xray', label: '', externalRef: '', takenAt: today() })
+
+  const attachments = useMemo(
+    () => (state.attachments || [])
+      .filter((a) => a.patientId === patient.id)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [state.attachments, patient.id]
+  )
+
+  const save = () => {
+    if (!draft.label.trim()) { toast('Add a label for this record.', 'error'); return }
+    repos.attachments.create({
+      patientId: patient.id, mrn: patient.mrn, type: draft.type, label: draft.label.trim(),
+      externalRef: draft.externalRef.trim(), takenAt: draft.takenAt,
+      uploadedBy: user.name, createdAt: new Date().toISOString(),
+    })
+    toast('Attachment reference added.')
+    setDraft({ type: 'xray', label: '', externalRef: '', takenAt: today() })
+    setAdding(false)
+  }
 
   return (
     <div className="mb-6 card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand p-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-brand-900">
-          <ClipboardPlus size={16} /> Procedure Plans
+          <FileImage size={16} /> Imaging & Documents — {patient.name}
         </h3>
-        <Select value={patientId} onChange={(e) => { setPatientId(e.target.value); setAddingFor(null) }} className="w-auto py-1.5 text-sm">
-          {deptPatients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </Select>
-      </div>
-
-      <div className="space-y-4 p-4">
-        {plans.length === 0 ? (
-          <EmptyState
-            title="No procedure plan yet"
-            message={canManage ? `Start a phased treatment plan for ${activePatient?.name}.` : 'No treatment plan on record for this patient.'}
-            action={canManage && (
-              <button className="btn-primary btn-sm" onClick={startPlan}><Plus size={14} /> Start Procedure Plan</button>
-            )}
-          />
-        ) : (
-          plans.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              patientId={patientId}
-              canManage={canManage}
-              dentalPricing={dentalPricing}
-              adding={addingFor === plan.id}
-              onAddItem={() => setAddingFor(plan.id)}
-              onCancelAdd={() => setAddingFor(null)}
-              onDoVerb={doVerb}
-            />
-          ))
+        {canManage && !adding && (
+          <button className="btn-ghost btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> Add reference</button>
         )}
       </div>
+      <p className="border-b border-sand bg-cream/40 px-4 py-2 text-xs text-ink/50">
+        Reference only — the actual file is stored in the imaging system, not in ArogyaFlow.
+      </p>
+
+      {adding && (
+        <div className="grid grid-cols-2 gap-2 border-b border-sand p-3 sm:grid-cols-5">
+          <Select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
+            {ATTACHMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+          <Input className="sm:col-span-2" placeholder="Label, e.g. Pre-op OPG — tooth 26" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
+          <Input placeholder="Imaging system ref / URL" value={draft.externalRef} onChange={(e) => setDraft({ ...draft, externalRef: e.target.value })} />
+          <Input type="date" value={draft.takenAt} onChange={(e) => setDraft({ ...draft, takenAt: e.target.value })} />
+          <div className="col-span-2 flex gap-2 sm:col-span-5">
+            <button className="btn-primary btn-sm" onClick={save}>Save</button>
+            <button className="btn-outline btn-sm" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {attachments.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-ink/40">No imaging or document references on file.</p>
+      ) : (
+        <ul className="divide-y divide-sand">
+          {attachments.map((a) => (
+            <li key={a.id} className="flex items-center justify-between px-4 py-3 text-sm">
+              <div>
+                <span className="font-medium text-brand-900">{a.label}</span>
+                <span className="ml-2 text-xs text-ink/40">{formatDate(a.takenAt)} · {a.uploadedBy}</span>
+                {a.externalRef && <div className="text-xs text-ink/50">{a.externalRef}</div>}
+              </div>
+              <Badge tone="slate">{ATTACHMENT_TYPES.find((t) => t.value === a.type)?.label || a.type}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
-function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem, onCancelAdd, onDoVerb }) {
+function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem, onCancelAdd, onDoVerb, onSignConsent }) {
   const { state, repos } = useHospital()
   const toast = useToast()
   const [draft, setDraft] = useState({ tooth: '', priceId: dentalPricing[0]?.id || '', phase: '', estAmount: dentalPricing[0]?.amount || 0 })
+
+  const patient = state.patients.find((p) => p.id === patientId)
 
   // Auto-linked so a completed item can raise a follow-up task from
   // whatever next-visit plan the dentist noted on the consultation (§9.8) —
@@ -120,6 +215,14 @@ function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem
     () => [...state.consultations].filter((c) => c.patientId === patientId).sort((a, b) => b.date.localeCompare(a.date))[0] || null,
     [state.consultations, patientId]
   )
+
+  const printConsent = (item) => {
+    const price = dentalPricing.find((p) => p.id === item.priceId)
+    const ok = printConsentForm({
+      patient, procedureName: item.procedureName, tooth: item.tooth, priceCode: price?.code, lang: 'bilingual',
+    })
+    if (!ok) toast('Please allow pop-ups to print the consent form.', 'error')
+  }
 
   const saveItem = () => {
     const price = dentalPricing.find((p) => p.id === draft.priceId)
@@ -140,9 +243,14 @@ function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem
     <div className="rounded-lg border border-sand">
       <div className="flex items-center justify-between border-b border-sand bg-cream/40 px-3 py-2 text-xs text-ink/50">
         <span>Started {formatDate(plan.createdAt)} by {plan.createdBy}</span>
-        <Badge tone={plan.consentStatus === 'signed' ? 'green' : 'gold'}>
-          {plan.consentStatus === 'signed' ? 'Consent signed' : 'Consent pending'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge tone={plan.consentStatus === 'signed' ? 'green' : 'gold'}>
+            {plan.consentStatus === 'signed' ? `Consent signed · ${plan.consentSignedBy}` : 'Consent pending'}
+          </Badge>
+          {canManage && plan.consentStatus !== 'signed' && (
+            <button className="btn-ghost btn-sm" onClick={() => onSignConsent(plan.id)}>Mark signed</button>
+          )}
+        </div>
       </div>
 
       {plan.items.length === 0 && !adding ? (
@@ -164,6 +272,11 @@ function PlanCard({ plan, patientId, canManage, dentalPricing, adding, onAddItem
                   <td className="td"><Badge status={item.status} /></td>
                   <td className="td">
                     <div className="flex justify-end gap-1">
+                      {canManage && item.status !== 'cancelled' && (
+                        <button className="btn-ghost btn-sm" title="Print consent form" onClick={() => printConsent(item)}>
+                          <FileSignature size={13} />
+                        </button>
+                      )}
                       {canManage && (ITEM_ACTIONS[item.status] || []).map(({ verb, label, icon: Icon }) => (
                         <button key={verb} className="btn-outline btn-sm" onClick={() => onDoVerb(verb, plan.id, item.id)}>
                           <Icon size={13} /> {label}

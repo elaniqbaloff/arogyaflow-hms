@@ -59,6 +59,16 @@ export const procedurePlans = [
   },
 ]
 
+// Imaging/document reference metadata (§9.5) — localStorage can't hold the
+// actual file, so this is a pointer into a real imaging system, not a blob.
+export const attachments = [
+  {
+    id: 'att_1', patientId: 'pat_6', mrn: 'MRN-0006', type: 'xray',
+    label: 'Pre-op periapical X-ray — tooth 26', externalRef: 'PACS-KTM-2026-0842',
+    takenAt: daysFromNow(-3), uploadedBy: 'Dr. Naseem Ali', createdAt: daysFromNow(-3),
+  },
+]
+
 export const tasks = [
   { id: 'tsk_1', type: 'lab-request', label: 'Lab test requested', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'lab', assignedDepartment: 'DIAG', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'lab_3', notes: 'Vitamin D for IPD Panchakarma patient.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },
   { id: 'tsk_2', type: 'pharmacy-dispense', label: 'Prescription to dispense', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'pharmacy', assignedDepartment: 'PHAR', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'rx_3', notes: 'Ksheerabala 101 + Ashwagandha.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },

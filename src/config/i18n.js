@@ -17,6 +17,7 @@ export const DICT = {
   treatmentSummary: { en: 'Treatment Summary', ar: 'ملخص العلاج' },
   dischargeSummary: { en: 'Discharge Summary', ar: 'ملخص الخروج' },
   therapyPlan: { en: 'Panchakarma Therapy Plan', ar: 'خطة علاج البانشاكarma' },
+  consentForm: { en: 'Informed Consent Form', ar: 'نموذج الموافقة المستنيرة' },
 
   // Patient + reference fields
   patientName: { en: 'Patient Name', ar: 'اسم المريض' },
@@ -38,6 +39,18 @@ export const DICT = {
   medicine: { en: 'Medicine', ar: 'الدواء' },
   dosage: { en: 'Dosage', ar: 'الجرعة' },
   therapy: { en: 'Therapy', ar: 'العلاج' },
+  procedure: { en: 'Procedure', ar: 'الإجراء' },
+  tooth: { en: 'Tooth', ar: 'السن' },
+  procedureDescription: { en: 'Description of Procedure', ar: 'وصف الإجراء' },
+  risksTitle: { en: 'Risks & Complications', ar: 'المخاطر والمضاعفات' },
+  alternativesTitle: { en: 'Alternatives', ar: 'البدائل' },
+  consentStatementTitle: { en: 'Patient Consent Statement', ar: 'بيان موافقة المريض' },
+  consentStatementBody: {
+    en: 'I confirm that the procedure, its risks, benefits, and alternatives have been explained to me in a language I understand, that I have had the opportunity to ask questions, and that I voluntarily consent to the procedure named on this form.',
+    ar: 'أؤكد أنه تم شرح الإجراء ومخاطره وفوائده وبدائله لي بلغة أفهمها، وأنه أُتيحت لي الفرصة لطرح الأسئلة، وأنني أوافق طوعاً على الإجراء المذكور في هذا النموذج.',
+  },
+  patientGuardianSignature: { en: 'Patient / Guardian Signature', ar: 'توقيع المريض / ولي الأمر' },
+  staffAttestation: { en: 'Staff Attestation', ar: 'إقرار الموظف' },
 
   // Billing
   description: { en: 'Description', ar: 'الوصف' },

@@ -1,5 +1,6 @@
 import { DICT, t } from '../config/i18n'
 import { computeBill } from './billing'
+import { CONSENT_TEMPLATES, consentClassForPriceCode } from '../data/consentTemplates'
 
 // ─────────────────────────────────────────────────────────────
 // Printable, branded documents (invoice/receipt). Opens a new
@@ -167,6 +168,132 @@ export function printInvoice({ bill, patient, episode, doctorName, lang = 'en' }
     <span>${lang === 'ar' ? DICT.generatedOn.ar : DICT.generatedOn.en}: ${new Date().toLocaleString('en-IN')}</span>
   </div>
   ${(lang === 'ar' || lang === 'bilingual') ? `<div class="note">${DICT.demoNote.en}</div>` : ''}
+</div>
+<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 250); };</script>
+</body>
+</html>`
+
+  const w = window.open('', '_blank', 'width=860,height=1000')
+  if (!w) return false
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  return true
+}
+
+// Bilingual paragraph helper — same idea as `lab()` but for a longer
+// {en, ar} content block rather than a single dictionary label.
+const para = (entry, lang) =>
+  lang === 'bilingual' ? `${entry.en}<br/><span class="ar">${entry.ar}</span>` : lang === 'ar' ? entry.ar : entry.en
+
+// Dental informed-consent form (§9.6) — reuses the same print-window
+// mechanics and visual language as printInvoice. Content is chosen by
+// procedure class (extraction/rootCanal/implant/general) via `priceCode`
+// (the item's pricing.code); print → sign on paper → the caller marks
+// the plan's consentStatus separately (repos.procedurePlans.signConsent).
+export function printConsentForm({ patient, procedureName, tooth, priceCode, lang = 'bilingual' }) {
+  const cls = consentClassForPriceCode(priceCode)
+  const tpl = CONSENT_TEMPLATES[cls]
+  const isRtl = lang === 'ar'
+  const dir = isRtl ? 'rtl' : 'ltr'
+
+  const title = lang === 'bilingual' ? `${DICT.consentForm.en} / ${DICT.consentForm.ar}` : t('consentForm', isRtl ? 'ar' : 'en')
+  const hospEn = DICT.hospitalName.en
+  const hospAr = DICT.hospitalName.ar
+  const hospName = lang === 'ar' ? hospAr : lang === 'bilingual' ? `${hospEn}<br><span class="ar">${hospAr}</span>` : hospEn
+
+  const patientNameDisplay = lang === 'ar' && patient.nameAr ? patient.nameAr
+    : lang === 'bilingual' && patient.nameAr ? `${patient.name} / ${patient.nameAr}`
+    : patient.name
+
+  const html = `<!doctype html>
+<html lang="${isRtl ? 'ar' : 'en'}" dir="${dir}">
+<head>
+<meta charset="utf-8" />
+<title>${title} — ${patient.mrn}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: ${isRtl ? "'Segoe UI', Tahoma, sans-serif" : "'Segoe UI', Helvetica, Arial, sans-serif"}; color: #1d2723; margin: 0; padding: 32px; background: #fff; }
+  .ar { font-family: 'Segoe UI', Tahoma, sans-serif; }
+  .sheet { max-width: 760px; margin: 0 auto; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 3px solid #184334; padding-bottom: 16px; }
+  .brand { display: flex; gap: 12px; align-items: center; }
+  .brand .name { font-size: 16px; font-weight: 700; color: #184334; line-height: 1.3; }
+  .brand .addr { font-size: 10px; color: #6b7280; margin-top: 3px; max-width: 320px; }
+  .doc-title { text-align: ${isRtl ? 'left' : 'right'}; }
+  .doc-title h1 { margin: 0; font-size: 20px; color: #184334; letter-spacing: .5px; }
+  .doc-title .sub { font-size: 11px; color: #6b7280; margin-top: 4px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px 40px; margin: 20px 0; }
+  .meta div { font-size: 12px; }
+  .meta .k { color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+  .meta .v { font-weight: 600; margin-top: 2px; }
+  section { margin-top: 18px; }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: #184334; border-bottom: 1px solid #d6ebdf; padding-bottom: 4px; margin: 0 0 8px; }
+  section p { font-size: 12.5px; line-height: 1.6; margin: 0; color: #1d2723; }
+  .statement { margin-top: 22px; background: #f1f5f2; border-radius: 8px; padding: 14px 16px; font-size: 12.5px; line-height: 1.6; }
+  .signatures { margin-top: 34px; display: flex; justify-content: space-between; gap: 24px; }
+  .sign { flex: 1; text-align: center; font-size: 11px; color: #6b7280; }
+  .sign .line { border-top: 1px solid #9ca3af; margin: 40px 0 4px; }
+  .sign .name { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+  .foot { margin-top: 28px; border-top: 1px solid #eee; padding-top: 10px; font-size: 10px; color: #9ca3af; display: flex; justify-content: space-between; }
+  .note { margin-top: 10px; font-size: 9.5px; color: #b45309; font-style: italic; }
+  @media print { body { padding: 0; } .sheet { max-width: 100%; } @page { margin: 16mm; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="head">
+    <div class="brand">
+      ${LOGO_SVG}
+      <div>
+        <div class="name">${hospName}</div>
+        <div class="addr">${lang === 'ar' ? DICT.hospitalAddress.ar : DICT.hospitalAddress.en}</div>
+        <div class="addr">ArogyaFlow · by Elan Iqbal</div>
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>${title}</h1>
+      <div class="sub">${patient.mrn}</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div><div class="k">${lab('patientName', lang)}</div><div class="v">${patientNameDisplay}</div></div>
+    <div><div class="k">${lab('mrn', lang)}</div><div class="v">${patient.mrn}</div></div>
+    <div><div class="k">${lab('date', lang)}</div><div class="v">${fmtDate(new Date().toISOString())}</div></div>
+    <div><div class="k">${lab('procedure', lang)}</div><div class="v">${procedureName || (isRtl ? tpl.label.ar : tpl.label.en)}</div></div>
+    ${tooth ? `<div><div class="k">${lab('tooth', lang)}</div><div class="v">${tooth}</div></div>` : ''}
+  </div>
+
+  <section>
+    <h2>${lab('procedureDescription', lang)}</h2>
+    <p>${para(tpl.procedureDesc, lang)}</p>
+  </section>
+
+  <section>
+    <h2>${lab('risksTitle', lang)}</h2>
+    <p>${para(tpl.risks, lang)}</p>
+  </section>
+
+  <section>
+    <h2>${lab('alternativesTitle', lang)}</h2>
+    <p>${para(tpl.alternatives, lang)}</p>
+  </section>
+
+  <div class="statement">
+    <strong>${lab('consentStatementTitle', lang)}.</strong> ${para(DICT.consentStatementBody, lang)}
+  </div>
+
+  <div class="signatures">
+    <div class="sign"><div class="line"></div>${lab('patientGuardianSignature', lang)}<div class="name">${patientNameDisplay}</div></div>
+    <div class="sign"><div class="line"></div>${lab('staffAttestation', lang)}<div class="name">${lab('date', lang)}: ____________</div></div>
+  </div>
+
+  <div class="foot">
+    <span>${lang === 'ar' ? DICT.generatedOn.ar : DICT.generatedOn.en}: ${new Date().toLocaleString('en-IN')}</span>
+    <span>ArogyaFlow</span>
+  </div>
+  <div class="note">${DICT.demoNote.en}</div>
 </div>
 <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 250); };</script>
 </body>
