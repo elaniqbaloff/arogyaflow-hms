@@ -50,14 +50,15 @@ function ensureCollections(s) {
 const DEPARTMENT_FALLBACK = {
   category: 'support', color: 'slate', icon: 'Building2',
   appointmentTypes: ['Consultation'], consultationTemplate: 'common', active: true,
+  dictionaryScopes: ['symptoms'],
 }
 
 // Idempotent per-department migration: backfills the config fields the
 // department engine needs (code/category/color/icon/appointmentTypes/
-// consultationTemplate/active), matching legacy records by id against the
-// current seed. Leaves already-migrated departments untouched.
+// consultationTemplate/active/dictionaryScopes), matching legacy records by
+// id against the current seed. Leaves already-migrated departments untouched.
 function migrateDepartment(dept, seedDepartments) {
-  const hasAllFields = ['code', 'category', 'color', 'icon', 'appointmentTypes', 'consultationTemplate', 'active']
+  const hasAllFields = ['code', 'category', 'color', 'icon', 'appointmentTypes', 'consultationTemplate', 'active', 'dictionaryScopes']
     .every((k) => dept[k] !== undefined)
   if (hasAllFields) return dept
   const seedMatch = (seedDepartments || []).find((d) => d.id === dept.id) || {}
@@ -70,6 +71,7 @@ function migrateDepartment(dept, seedDepartments) {
     appointmentTypes: dept.appointmentTypes ?? seedMatch.appointmentTypes ?? DEPARTMENT_FALLBACK.appointmentTypes,
     consultationTemplate: dept.consultationTemplate ?? seedMatch.consultationTemplate ?? DEPARTMENT_FALLBACK.consultationTemplate,
     active: dept.active ?? seedMatch.active ?? DEPARTMENT_FALLBACK.active,
+    dictionaryScopes: dept.dictionaryScopes ?? seedMatch.dictionaryScopes ?? DEPARTMENT_FALLBACK.dictionaryScopes,
   }
 }
 

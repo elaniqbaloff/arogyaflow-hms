@@ -329,16 +329,16 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
       </div>
 
       <Field label="Chief complaint" required>
-        <SmartField as={Textarea} fieldKey="chiefComplaint" departmentCode={department?.code} value={d.chiefComplaint} onChange={(e) => setField('chiefComplaint', e.target.value)} placeholder="Presenting symptoms in patient's words…" />
+        <SmartField as={Textarea} fieldKey="chiefComplaint" departmentCode={department?.code} recordId={d.id} value={d.chiefComplaint} onChange={(e) => setField('chiefComplaint', e.target.value)} placeholder="Presenting symptoms in patient's words…" />
       </Field>
       <Field label="Diagnosis" required>
-        <SmartField fieldKey="diagnosis" departmentCode={department?.code} value={d.diagnosis} onChange={(e) => setField('diagnosis', e.target.value)} placeholder="e.g. Lumbar spondylosis with sciatica" />
+        <SmartField fieldKey="diagnosis" departmentCode={department?.code} recordId={d.id} value={d.diagnosis} onChange={(e) => setField('diagnosis', e.target.value)} placeholder="e.g. Lumbar spondylosis with sciatica" />
       </Field>
       <Field label="Consultation notes">
-        <SmartField as={Textarea} fieldKey="notes" departmentCode={department?.code} value={d.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="History, examination, observations…" />
+        <SmartField as={Textarea} fieldKey="notes" departmentCode={department?.code} recordId={d.id} value={d.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="History, examination, observations…" />
       </Field>
       <Field label="Treatment plan" required>
-        <SmartField as={Textarea} fieldKey="treatment" departmentCode={department?.code} value={d.treatment} onChange={(e) => setField('treatment', e.target.value)} placeholder="Therapies, advice, follow-up…" />
+        <SmartField as={Textarea} fieldKey="treatment" departmentCode={department?.code} recordId={d.id} value={d.treatment} onChange={(e) => setField('treatment', e.target.value)} placeholder="Therapies, advice, follow-up…" />
       </Field>
 
       {ayurveda && (
@@ -371,7 +371,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
           </Field>
 
           <Field label="Chikitsa Sutra (treatment principle)" required>
-            <SmartField as={Textarea} fieldKey="chikitsaSutra" departmentCode={department?.code} value={d.chikitsaSutra} onChange={(e) => setField('chikitsaSutra', e.target.value)} placeholder="Overall treatment principle…" />
+            <SmartField as={Textarea} fieldKey="chikitsaSutra" departmentCode={department?.code} recordId={d.id} value={d.chikitsaSutra} onChange={(e) => setField('chikitsaSutra', e.target.value)} placeholder="Overall treatment principle…" />
           </Field>
 
           <Field label="Anupana">
@@ -383,6 +383,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
               <SmartField
                 fieldKey="therapyAdvice"
                 departmentCode={department?.code}
+                recordId={d.id}
                 value={(d.therapyAdvice?.procedures || []).join(', ')}
                 onChange={(e) => setNested('therapyAdvice', 'procedures', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
                 placeholder="e.g. Abhyanga, Ela Kizhi, Kati Basti"
@@ -392,6 +393,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
               <SmartField
                 fieldKey="followUp"
                 departmentCode={department?.code}
+                recordId={d.id}
                 value={d.therapyAdvice?.notes || ''}
                 onChange={(e) => setNested('therapyAdvice', 'notes', e.target.value)}
                 placeholder="Protocol notes…"

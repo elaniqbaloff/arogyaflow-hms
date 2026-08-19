@@ -8,6 +8,7 @@ import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
   PageHeader, StatCard, Badge, Field, Input, Select, Textarea, EmptyState,
 } from '../components/ui/primitives'
+import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, daysFromNow, uid, codeNo, mrnTail } from '../lib/utils'
 import {
   CLEARANCE_GATES, emptyClearance, clearanceProgress, allGatesCleared,
@@ -401,7 +402,7 @@ function DischargeModal({ episode, onClose, user, patientName, clearGate, overri
             <>
               <p className="text-sm font-medium text-gold-800">Admin/Management override</p>
               <p className="mb-2 text-xs text-ink/50">Discharge before all clearances are complete. This is audited.</p>
-              <Textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Reason for override…" />
+              <SmartField as={Textarea} fieldKey="dischargeAdvice" recordId={episode.id} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Reason for override…" />
             </>
           ) : (
             <p className="text-sm text-ink/60">Complete all clearances to enable discharge. Only Admin/Management can override.</p>

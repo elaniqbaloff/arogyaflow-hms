@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHospital } from '../../store/HospitalContext'
 import { useAuth } from '../../store/AuthContext'
-import { suggest } from '../../services/smartAssist'
+import { suggest, recordRecentTerm } from '../../services/smartAssist'
 import { Badge, Input } from './primitives'
 import { cx } from '../../lib/utils'
 
@@ -24,8 +24,8 @@ function currentFragment(value, caret) {
 // clinical-term autocomplete. Fully transparent when the dropdown is
 // closed — same value/onChange contract as the plain primitive, and it
 // never mutates the field on blur, only on an explicit pick.
-export function SmartField({ as: Field = Input, fieldKey, departmentCode, value, onChange, onBlur, className, ...rest }) {
-  const { state } = useHospital()
+export function SmartField({ as: Field = Input, fieldKey, departmentCode, recordId, value, onChange, onBlur, className, ...rest }) {
+  const { state, logAudit } = useHospital()
   const { user } = useAuth()
   const elRef = useRef(null)
   const debounceRef = useRef(null)
@@ -99,6 +99,16 @@ export function SmartField({ as: Field = Input, fieldKey, departmentCode, value,
     pendingCaretRef.current = nextCaret
     onChange?.({ target: { value: nextValue, name: rest.name } })
     close()
+
+    recordRecentTerm(user?.id, result.id)
+    // Only template insertions are audited — individual word suggestions
+    // (the vast majority of inserts) are never logged.
+    if (result.templateText) {
+      logAudit({
+        user, action: 'smartassist.template.inserted', module: 'consultations',
+        recordId: recordId || null, newValue: result.term,
+      })
+    }
   }
 
   const handleKeyDown = (e) => {

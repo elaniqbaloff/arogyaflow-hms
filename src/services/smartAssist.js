@@ -25,6 +25,35 @@ export const FIELD_BINDINGS = {
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// ── Per-user "recently inserted" term history ──
+// Same defensive try/catch localStorage pattern as storageAdapter.js, kept
+// separate from the main app state (this is UI-personalization data, not
+// something that needs to round-trip through the state/audit model).
+const RECENT_KEY_PREFIX = 'arogyaflow-smartassist-recent-'
+const MAX_RECENT_TERMS = 20
+
+export function getRecentTermIds(userId) {
+  if (!userId) return []
+  try {
+    const raw = localStorage.getItem(RECENT_KEY_PREFIX + userId)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+// Call when a suggestion is actually inserted (not on every keystroke) so
+// the user's next few queries rank their own recent picks higher.
+export function recordRecentTerm(userId, termId) {
+  if (!userId || !termId) return
+  try {
+    const next = [termId, ...getRecentTermIds(userId).filter((id) => id !== termId)].slice(0, MAX_RECENT_TERMS)
+    localStorage.setItem(RECENT_KEY_PREFIX + userId, JSON.stringify(next))
+  } catch {
+    /* ignore — ranking boost just won't apply this session */
+  }
+}
+
 // Merges live master collections into the searchable pool, tagged with
 // the categories the dictionary already uses so they rank alongside
 // curated terms. Never mutates or persists — computed fresh per call.
@@ -59,11 +88,12 @@ function buildPool(state) {
  *
  * Triggers at 2+ characters, case-insensitive. Match priority (highest
  * first): exact abbreviation > term prefix > alias prefix > word-boundary
- * contains. Within a tier, matches whose category is bound to `fieldKey`
- * (see FIELD_BINDINGS) rank first, then alphabetically.
- *
- * `departmentCode` and `user` are accepted for forward compatibility —
- * department-aware ranking is added in a later phase, not scored here.
+ * contains. Within a tier, matches rank by an additive boost score, then
+ * alphabetically:
+ *  - +1 category is bound to the given `fieldKey` (FIELD_BINDINGS)
+ *  - +2 `departmentCode` appears in the term's `departments`
+ *  - +1 the term's category is in the department's `dictionaryScopes`
+ *  - +1 the term is among the user's ~20 most recently inserted terms
  */
 export function suggest(query, { state, user, departmentCode, fieldKey, limit = 8 } = {}) {
   const q = (query || '').trim().toLowerCase()
@@ -71,6 +101,10 @@ export function suggest(query, { state, user, departmentCode, fieldKey, limit = 
 
   const boundedCategories = FIELD_BINDINGS[fieldKey] || []
   const wordBoundary = new RegExp(`\\b${escapeRegExp(q)}`, 'i')
+
+  const dept = departmentCode ? (state?.departments || []).find((d) => d.code === departmentCode) : null
+  const dictionaryScopes = dept?.dictionaryScopes || []
+  const recentTermIds = getRecentTermIds(user?.id)
 
   const pool = buildPool(state || {})
   const matches = []
@@ -87,13 +121,18 @@ export function suggest(query, { state, user, departmentCode, fieldKey, limit = 
     else if (wordBoundary.test(entry.term) || aliases.some((a) => wordBoundary.test(a))) tier = 3
     else continue
 
-    const boosted = boundedCategories.includes(entry.category) ? 1 : 0
-    matches.push({ entry, tier, boosted })
+    let boost = 0
+    if (boundedCategories.includes(entry.category)) boost += 1
+    if (departmentCode && (entry.departments || []).includes(departmentCode)) boost += 2
+    if (dictionaryScopes.includes(entry.category)) boost += 1
+    if (recentTermIds.includes(entry.id)) boost += 1
+
+    matches.push({ entry, tier, boost })
   }
 
   matches.sort((a, b) =>
     a.tier - b.tier ||
-    b.boosted - a.boosted ||
+    b.boost - a.boost ||
     a.entry.term.localeCompare(b.entry.term)
   )
 

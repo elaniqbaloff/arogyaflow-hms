@@ -8,6 +8,7 @@ import { Modal } from '../components/ui/Modal'
 import {
   PageHeader, StatCard, Badge, Field, Input, Select, Textarea, EmptyState, Avatar,
 } from '../components/ui/primitives'
+import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, uid } from '../lib/utils'
 
 const MED_STATUSES = ['pending', 'given', 'skipped', 'delayed']
@@ -198,7 +199,7 @@ function VitalsModal({ episode, onClose }) {
         {F('Respiratory rate', 'resp', '16')}
         {F('Blood sugar', 'sugar', '110')}
       </div>
-      <div className="mt-4"><Field label="Notes"><Textarea value={v.notes} onChange={(e) => setV({ ...v, notes: e.target.value })} /></Field></div>
+      <div className="mt-4"><Field label="Notes"><SmartField as={Textarea} fieldKey="nursingNote" recordId={episode.id} value={v.notes} onChange={(e) => setV({ ...v, notes: e.target.value })} /></Field></div>
     </Modal>
   )
 }
@@ -218,7 +219,7 @@ function NoteModal({ episode, onClose }) {
     <Modal open onClose={onClose} title="Add Nursing Note"
       footer={<><button className="btn-outline" onClick={onClose}>Cancel</button><button className="btn-primary" onClick={save}>Save Note</button></>}>
       <div className="space-y-4">
-        <Field label="Note" required><Textarea value={data.note} onChange={(e) => setData({ ...data, note: e.target.value })} placeholder="Observation, care provided…" /></Field>
+        <Field label="Note" required><SmartField as={Textarea} fieldKey="nursingNote" recordId={episode.id} value={data.note} onChange={(e) => setData({ ...data, note: e.target.value })} placeholder="Observation, care provided…" /></Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Medication (optional)">
             <Select value={data.medication} onChange={(e) => setData({ ...data, medication: e.target.value })}>
