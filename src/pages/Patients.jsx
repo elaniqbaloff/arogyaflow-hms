@@ -7,7 +7,7 @@ import {
   Users, Plus, Pencil, Archive, ArchiveRestore, Eye, BedDouble, Activity, FileText, Pill,
   FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle, Smile,
   User, Phone, HeartPulse, ClipboardList, IdCard, Venus, NotebookPen, AlertTriangle, ShieldAlert,
-  Gauge, TrendingDown, TrendingUp,
+  Gauge, TrendingDown, TrendingUp, Check, ShieldCheck,
 } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
@@ -15,6 +15,7 @@ import { can } from '../config/roles'
 import { departmentOptions, getDepartment, departmentDotClass } from '../config/departmentUtils'
 import { scopeFilter } from '../services/accessPolicy'
 import { buildJourney, buildActiveStrip } from '../services/journey'
+import { CLEARANCE_GATES, emptyClearance, clearanceProgress } from '../services/discharge'
 
 // Journey event type -> icon (§11 Phase 8a/8b). The dot's BACKGROUND color
 // comes from the event's own department config color (departmentDotClass)
@@ -677,6 +678,20 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   // items, shown on the header regardless of which tab is selected.
   const activeStrip = useMemo(() => buildActiveStrip(state, patient), [state, patient])
 
+  // Discharge readiness (§11.2 Phase 8d) — read-only view of the SAME
+  // clearance model IPD.jsx's interactive DischargeModal already uses;
+  // this doesn't duplicate the "mark cleared" actions, it just surfaces
+  // the same state on the patient's own profile. "Follow-up booked" isn't
+  // one of discharge.js's blocking gates (no such concept exists there),
+  // so it's computed here as its own informational row: any appointment
+  // still scheduled for a future date.
+  const dischargeClearance = activeIpd ? (activeIpd.clearance || emptyClearance()) : null
+  const dischargeProgress = activeIpd ? clearanceProgress(dischargeClearance) : null
+  const hasFollowUpBooked = useMemo(
+    () => appts.some((a) => a.date > today() && a.status === 'scheduled'),
+    [appts]
+  )
+
   // Filter chips (§11 Phase 8b) — only departments actually present in
   // this patient's own journey, not every department in the hospital.
   const journeyDepts = useMemo(() => {
@@ -709,6 +724,39 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
         <div className="mb-4 flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Active now</span>
           {activeStrip.map((s) => <Badge key={s.key} tone={s.tone}>{s.label}</Badge>)}
+        </div>
+      )}
+
+      {/* Discharge readiness (§11.2 Phase 8d) — read-only; clearing a gate
+          still happens in IPD.jsx's DischargeModal, this just surfaces the
+          same state here so it doesn't need a separate lookup. */}
+      {activeIpd && (
+        <div className="mb-4 rounded-xl border border-sand p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-brand-900"><ShieldCheck size={15} /> Discharge Readiness</h4>
+            <Link to="/ipd" className="text-xs font-medium text-brand-700 hover:underline">Manage in IPD →</Link>
+          </div>
+          <div className="mb-2 flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sand">
+              <div className="h-full bg-brand-600" style={{ width: `${dischargeProgress.pct}%` }} />
+            </div>
+            <span className="text-xs text-ink/50">{dischargeProgress.done}/{dischargeProgress.total} cleared</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {CLEARANCE_GATES.map((g) => {
+              const done = dischargeClearance[g.key]?.done
+              return (
+                <span key={g.key} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${done ? 'bg-brand-50 text-brand-700' : 'bg-sand/60 text-ink/50'}`}>
+                  {done ? <Check size={11} /> : <span className="h-2.5 w-2.5 rounded-full border border-ink/30" />}
+                  {g.label.replace(' (Doctor)', '').replace(' (Reception)', '')}
+                </span>
+              )
+            })}
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${hasFollowUpBooked ? 'bg-brand-50 text-brand-700' : 'bg-sand/60 text-ink/50'}`}>
+              {hasFollowUpBooked ? <Check size={11} /> : <span className="h-2.5 w-2.5 rounded-full border border-ink/30" />}
+              Follow-up booked
+            </span>
+          </div>
         </div>
       )}
 
