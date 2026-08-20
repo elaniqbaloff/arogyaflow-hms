@@ -14,7 +14,7 @@ import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
 import { departmentOptions, getDepartment, departmentDotClass } from '../config/departmentUtils'
 import { scopeFilter } from '../services/accessPolicy'
-import { buildJourney } from '../services/journey'
+import { buildJourney, buildActiveStrip } from '../services/journey'
 
 // Journey event type -> icon (§11 Phase 8a/8b). The dot's BACKGROUND color
 // comes from the event's own department config color (departmentDotClass)
@@ -673,6 +673,9 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   // every department/collection touching this patient, not just the 9
   // sources this component used to build inline.
   const timeline = useMemo(() => buildJourney(state, patient), [state, patient])
+  // Active journey strip (§11.2 Phase 8c) — the patient's currently open
+  // items, shown on the header regardless of which tab is selected.
+  const activeStrip = useMemo(() => buildActiveStrip(state, patient), [state, patient])
 
   // Filter chips (§11 Phase 8b) — only departments actually present in
   // this patient's own journey, not every department in the hospital.
@@ -699,7 +702,15 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
 
   return (
     <Modal open onClose={onClose} title={patient.name} subtitle={`${patient.mrn} · ${patient.visitType || 'OPD'} · Registered ${formatDate(patient.registeredOn)}`} size="lg"
-      footer={onConvert && !activeIpd ? <button className="btn-primary" onClick={() => onConvert(patient)}><BedDouble size={16} /> Convert to IPD</button> : (activeIpd ? <Badge status="active">Active IPD · {activeIpd.ward}</Badge> : null)}>
+      footer={onConvert && !activeIpd ? <button className="btn-primary" onClick={() => onConvert(patient)}><BedDouble size={16} /> Convert to IPD</button> : null}>
+
+      {/* Active journey strip (§11.2 Phase 8c) — always visible, any tab */}
+      {activeStrip.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">Active now</span>
+          {activeStrip.map((s) => <Badge key={s.key} tone={s.tone}>{s.label}</Badge>)}
+        </div>
+      )}
 
       {/* Safety banners always visible at the top */}
       {(flagAllergy || pregnant || hasVal(f.lmp)) && (

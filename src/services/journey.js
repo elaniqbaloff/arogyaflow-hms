@@ -21,12 +21,17 @@
 // ─────────────────────────────────────────────────────────────
 
 import { inr } from '../lib/utils'
+import { computeBill } from '../lib/billing'
 
 const hasVal = (v) => v !== undefined && v !== null && v !== ''
 
 function codeForDeptName(state, name) {
   return (state.departments || []).find((d) => d.name === name)?.code || null
 }
+
+const billTotal = (b) => b.total ?? computeBill({
+  items: b.items, discountType: b.discountType, discountValue: b.discountValue, gstRate: b.gstRate,
+}).grandTotal
 
 // Task types that represent a journey-worthy event on their own but aren't
 // already covered by a dedicated domain loop below — physio-referral and
@@ -122,4 +127,64 @@ export function buildJourney(state, patient) {
     push(t.assignedDepartment || patientDept, t.type, t.label, t.status, t.completedAt || t.createdAt, t.id, t.notes))
 
   return events.filter((e) => e.at).sort((a, b) => b.at.localeCompare(a.at))
+}
+
+// Active journey strip (§11.2 Phase 8c) — the patient's currently OPEN
+// items across departments, not history: "IPD (Ward) · Panchakarma 3/7 ·
+// Lab: 1 pending · Pharmacy: to dispense · Bill: ₹4,300 due". A segment is
+// only included when it's actually relevant (non-zero/active) so the strip
+// stays short for a patient with nothing outstanding. Every number here is
+// already computed elsewhere in the app hospital-wide (Dashboard, Reports)
+// — this just re-runs the same filters scoped to one patient.
+export function buildActiveStrip(state, patient) {
+  if (!patient) return []
+  const pid = patient.id
+  const segments = []
+
+  const episodes = (state.episodes || []).filter((e) => e.patientId === pid)
+  const activeIpd = episodes.find((e) => e.type === 'IPD' && e.status === 'admitted')
+  const latestOpd = [...episodes.filter((e) => e.type === 'OPD')].sort((a, b) => b.date.localeCompare(a.date))[0]
+  const activeEpisode = activeIpd || latestOpd
+
+  if (activeIpd) segments.push({ key: 'ipd', label: `IPD (${activeIpd.ward})`, tone: 'sky' })
+
+  // Panchakarma progress is an approximation: there's no explicit therapy-
+  // course/package concept in this data model (unlike physio's
+  // treatmentPlans.plannedSessions) — "completed of all therapies tied to
+  // the current episode" is the closest honest reading, same convention as
+  // 6e's no-show rate and 7d's order→collect TAT.
+  if (activeEpisode) {
+    const eTherapies = (state.therapies || []).filter((t) => t.episodeId === activeEpisode.id)
+    if (eTherapies.length > 0) {
+      const done = eTherapies.filter((t) => t.status === 'completed').length
+      segments.push({ key: 'therapy', label: `Panchakarma ${done}/${eTherapies.length}`, tone: 'green' })
+    }
+  }
+
+  const pendingLab = (state.labTests || []).filter((l) => l.patientId === pid && !['acknowledged', 'cancelled'].includes(l.status)).length
+  if (pendingLab > 0) segments.push({ key: 'lab', label: `Lab: ${pendingLab} pending`, tone: 'sky' })
+
+  const toDispense = (state.prescriptions || []).filter((r) => r.patientId === pid && r.status !== 'dispensed').length
+  if (toDispense > 0) segments.push({ key: 'pharmacy', label: 'Pharmacy: to dispense', tone: 'gold' })
+
+  const dueBills = (state.bills || []).filter((b) => b.patientId === pid && b.status !== 'paid')
+  const dueAmount = dueBills.reduce((s, b) => s + (billTotal(b) - (b.paidAmount || 0)), 0)
+  if (dueAmount > 0) segments.push({ key: 'billing', label: `Bill: ${inr(dueAmount)} due`, tone: 'rose' })
+
+  // Beyond the blueprint's literal example — physio/dental open-item
+  // coverage, using the same session-note-count proxy the Physio tab's
+  // pain trend already relies on (§10.3), not a new metric.
+  const activePhysioPlan = (state.treatmentPlans || []).find((p) => p.patientId === pid && p.status === 'active')
+  if (activePhysioPlan) {
+    const sessionsDone = (state.progressNotes || []).filter((n) => n.treatmentPlanId === activePhysioPlan.id).length
+    segments.push({ key: 'physio', label: `Physio: ${sessionsDone}/${activePhysioPlan.plannedSessions} sessions`, tone: 'gold' })
+  }
+
+  const openDentalItems = (state.procedurePlans || [])
+    .filter((p) => p.patientId === pid)
+    .flatMap((p) => p.items || [])
+    .filter((i) => !['completed', 'cancelled'].includes(i.status)).length
+  if (openDentalItems > 0) segments.push({ key: 'dental', label: `Dental: ${openDentalItems} pending`, tone: 'sky' })
+
+  return segments
 }
