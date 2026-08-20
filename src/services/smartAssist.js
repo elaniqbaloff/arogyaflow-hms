@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────
 // Clinical Smart Assist — pure, local, offline suggestion engine over
-// the curated clinicalDictionary plus live master data merged in at
-// query time (medicines, lab tests, Panchakarma pricing rows — never
-// duplicated into the static dictionary, always read fresh from state).
+// state.clinicalTerms (seeded from data/clinicalDictionary.js at boot,
+// editable at runtime via Settings' Dictionary tab — SA-P4, §11 Phase 7e)
+// plus live master data merged in at query time (medicines, lab tests,
+// Panchakarma pricing rows — never duplicated into clinicalTerms, always
+// read fresh from state).
 // ─────────────────────────────────────────────────────────────
-
-import { clinicalTerms } from '../data/clinicalDictionary'
 
 // fieldKey -> categories that field cares most about. suggest() boosts
 // matches whose category is bound to the fieldKey the caller passes in.
@@ -73,7 +73,7 @@ export function recordRecentTerm(userId, termId) {
 // the categories the dictionary already uses so they rank alongside
 // curated terms. Never mutates or persists — computed fresh per call.
 function buildPool(state) {
-  const dictionary = clinicalTerms.filter((t) => t.active !== false)
+  const dictionary = (state?.clinicalTerms || []).filter((t) => t.active !== false)
 
   const medicines = (state?.medicines || []).map((m) => ({
     id: `live_med_${m.id}`, term: m.name, category: 'medicine',

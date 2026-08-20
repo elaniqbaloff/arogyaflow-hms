@@ -204,6 +204,7 @@ export const ROLES = {
       'tasks.read',
       'audit.read',
       'demo.manage',
+      'dictionary.manage',
     ],
     scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'department' },
     landing: '/settings',

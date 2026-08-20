@@ -63,6 +63,7 @@ export function buildRepositories(prim) {
     progressNotes: crud('progressNotes', prim),
     packages: crud('packages', prim),
     tasks: crud('tasks', prim),
+    clinicalTerms: crud('clinicalTerms', prim),
     approvals: crud('approvals', prim),
     audit: crud('audit', prim),
     snapshots: crud('snapshots', prim),
