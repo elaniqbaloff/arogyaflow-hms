@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FlaskConical, Plus, Pencil, Trash2, FileCheck2, TestTube2, Check, X } from 'lucide-react'
+import { FlaskConical, Plus, Pencil, Trash2, FileCheck2, TestTube2, Check, X, Layers } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
@@ -10,6 +10,7 @@ import {
 } from '../components/ui/primitives'
 import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, uid } from '../lib/utils'
+import { LAB_PANELS } from '../data/labPanels'
 
 const COMMON_TESTS = ['Complete Blood Count', 'HbA1c', 'Lipid Profile', 'Liver Function Test', 'Thyroid Profile', 'Vitamin D', 'Urine Routine']
 
@@ -34,6 +35,7 @@ export default function Lab() {
   const [tab, setTab] = useState('pending')
   const [query, setQuery] = useState('')
   const [form, setForm] = useState(null)
+  const [panelForm, setPanelForm] = useState(null)
   const [result, setResult] = useState(null)
   const [confirm, setConfirm] = useState(null)
 
@@ -63,6 +65,16 @@ export default function Lab() {
       toast(`Test "${d.testName}" requested — Lab notified.`)
     } else { repos.labTests.update(d.id, d); toast('Test request updated.') }
     setForm(null)
+  }
+
+  const savePanel = () => {
+    if (!panelForm.patientId) { toast('Choose a patient.', 'error'); return }
+    const outcome = repos.labTests.orderPanel(
+      panelForm.panelKey, { patientId: panelForm.patientId, doctorId: user.id, requestedOn: panelForm.requestedOn }, user
+    )
+    if (!outcome.ok) { toast(`Couldn't order panel (${outcome.reason}).`, 'error'); return }
+    toast(`${LAB_PANELS[panelForm.panelKey].label} ordered — Lab notified.`)
+    setPanelForm(null)
   }
 
   const doVerb = (verb, test) => {
@@ -95,7 +107,14 @@ export default function Lab() {
         title="Lab & Diagnostics"
         subtitle="Test requests, workload and results"
         icon={FlaskConical}
-        actions={canManage && <button className="btn-primary" onClick={() => setForm({ mode: 'add', data: { ...blank } })}><Plus size={18} /> New Test Request</button>}
+        actions={canManage && (
+          <div className="flex gap-2">
+            <button className="btn-outline" onClick={() => setPanelForm({ patientId: state.patients[0]?.id || '', panelKey: Object.keys(LAB_PANELS)[0], requestedOn: today() })}>
+              <Layers size={18} /> Order a Panel
+            </button>
+            <button className="btn-primary" onClick={() => setForm({ mode: 'add', data: { ...blank } })}><Plus size={18} /> New Test Request</button>
+          </div>
+        )}
       />
 
       <div className="card overflow-hidden">
@@ -129,7 +148,10 @@ export default function Lab() {
               <tbody className="divide-y divide-sand">
                 {list.map((t) => (
                   <tr key={t.id} className="hover:bg-cream/40">
-                    <td className="td font-medium text-brand-900">{t.testName}</td>
+                    <td className="td font-medium text-brand-900">
+                      {t.testName}
+                      {t.panelLabel && <span className="ml-2 inline-block align-middle"><Badge tone="slate">{t.panelLabel}</Badge></span>}
+                    </td>
                     <td className="td">{patientName(t.patientId)}</td>
                     <td className="td text-ink/50">{formatDate(t.requestedOn)}</td>
                     <td className="td max-w-[220px] truncate text-ink/60">{t.result || '—'}</td>
@@ -192,6 +214,40 @@ export default function Lab() {
             <Field label="Requested on">
               <Input type="date" value={form.data.requestedOn} onChange={(e) => setForm({ ...form, data: { ...form.data, requestedOn: e.target.value } })} />
             </Field>
+          </div>
+        )}
+      </Modal>
+
+      {/* Order a panel — several tests at once (§11 Phase 7b) */}
+      <Modal
+        open={!!panelForm}
+        onClose={() => setPanelForm(null)}
+        title="Order a Panel"
+        footer={<>
+          <button className="btn-outline" onClick={() => setPanelForm(null)}>Cancel</button>
+          <button className="btn-primary" onClick={savePanel}>Order Panel</button>
+        </>}
+      >
+        {panelForm && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Patient" required>
+              <Select value={panelForm.patientId} onChange={(e) => setPanelForm({ ...panelForm, patientId: e.target.value })}>
+                {state.patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Panel" required>
+              <Select value={panelForm.panelKey} onChange={(e) => setPanelForm({ ...panelForm, panelKey: e.target.value })}>
+                {Object.entries(LAB_PANELS).map(([key, p]) => (
+                  <option key={key} value={key}>{p.label} ({p.tests.length} tests)</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Requested on">
+              <Input type="date" value={panelForm.requestedOn} onChange={(e) => setPanelForm({ ...panelForm, requestedOn: e.target.value })} />
+            </Field>
+            <div className="sm:col-span-2 rounded-lg bg-cream/60 p-3 text-xs text-ink/60">
+              Creates {LAB_PANELS[panelForm.panelKey].tests.length} individual test requests: {LAB_PANELS[panelForm.panelKey].tests.join(', ')}.
+            </div>
           </div>
         )}
       </Modal>

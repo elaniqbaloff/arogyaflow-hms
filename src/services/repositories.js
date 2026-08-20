@@ -20,6 +20,7 @@
 import { uid, today } from '../lib/utils'
 import { buildAudit, buildTask } from './workflow'
 import { ORDER_SETS } from '../data/orderSets'
+import { LAB_PANELS } from '../data/labPanels'
 
 // Generic CRUD factory bound to a collection name.
 function crud(collection, prim) {
@@ -395,6 +396,42 @@ export function buildRepositories(prim) {
       transitionLabTest(id, 'resulted', user, { result: resultText, resultedAt: new Date().toISOString() }),
     acknowledge: (id, user) => transitionLabTest(id, 'acknowledged', user, { acknowledgedAt: new Date().toISOString() }),
     cancel: (id, user, reason) => transitionLabTest(id, 'cancelled', user, { reason }),
+
+    // Grouped ordering (§11 Phase 7b): creates one labTests record per test
+    // in the panel, all in a single atomic prim.batch() (never a loop of
+    // separate prim.add() calls — a partial batch would leave a half-ordered
+    // panel if something failed mid-loop), tagged with a shared panelId so
+    // the worklist can show which rows belong together. One consolidated
+    // lab-request task covers the whole panel rather than one per test, to
+    // avoid worklist noise — mirrors how a phlebotomist draws one tube per
+    // panel, not one per analyte.
+    orderPanel: (panelKey, { patientId, doctorId, requestedOn }, user) => {
+      const panel = LAB_PANELS[panelKey]
+      if (!panel) return { ok: false, reason: 'unknown-panel' }
+      const panelId = uid('panel')
+      const testIds = panel.tests.map(() => uid('lab'))
+      const items = panel.tests.map((testName, i) => ({
+        collection: 'labTests',
+        record: {
+          id: testIds[i], patientId, doctorId, episodeId: null, testName,
+          department: 'Diagnostics', requestedOn: requestedOn || today(),
+          status: 'ordered', result: '', panelId, panelLabel: panel.label,
+        },
+      }))
+      prim.batch(items)
+
+      const patient = (prim.getState().patients || []).find((p) => p.id === patientId)
+      const mrn = patient?.mrn || null
+      prim.add('tasks', buildTask({
+        type: 'lab-request', mrn, sourceRole: user?.role, createdBy: user?.name || 'System',
+        relatedId: panelId, notes: `${panel.label} (${panel.tests.length} tests) for ${patient?.name || 'patient'}`,
+      }))
+      prim.add('audit', buildAudit({
+        user, action: 'labTest.panel.ordered', module: 'lab', recordId: panelId, mrn,
+        oldValue: null, newValue: panelKey, remarks: panel.label,
+      }))
+      return { ok: true, panelId, testIds }
+    },
   }
 
   base.approvals = {
