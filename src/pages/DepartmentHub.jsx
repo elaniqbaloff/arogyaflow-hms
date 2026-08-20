@@ -10,6 +10,7 @@ import { canSeeTask } from '../services/taskPolicy'
 import { PageHeader, StatCard, Badge, EmptyState } from '../components/ui/primitives'
 import { TaskTable } from '../components/TaskTable'
 import { ProcedurePlanPanel } from '../components/dental/ProcedurePlanPanel'
+import { TreatmentPlanPanel } from '../components/physio/TreatmentPlanPanel'
 import { today } from '../lib/utils'
 
 export default function DepartmentHub() {
@@ -64,6 +65,7 @@ export default function DepartmentHub() {
       </div>
 
       {dept.code === 'DENT' && <ProcedurePlanPanel dept={dept} />}
+      {dept.code === 'PHYS' && <TreatmentPlanPanel dept={dept} />}
 
       <div className="mb-6 card overflow-hidden">
         <div className="border-b border-sand p-4">

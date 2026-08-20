@@ -257,7 +257,7 @@ export const bills = [
     discountType: 'fixed', discountValue: 2000, gstRate: 5, paidAmount: 15000, total: 21840 },
 ]
 
-import { pricing, billableItems, procedurePlans, attachments, tasks, approvals, audit, snapshots } from './workflowSeed'
+import { pricing, billableItems, procedurePlans, attachments, treatmentPlans, tasks, approvals, audit, snapshots } from './workflowSeed'
 import { clinicalTerms } from './clinicalDictionary'
 
 export const buildInitialState = () => ({
@@ -267,7 +267,7 @@ export const buildInitialState = () => ({
   medicines, labTests,
   vitals, nursingNotes, therapies,
   bills,
-  pricing, billableItems, procedurePlans, attachments, tasks, approvals, audit, snapshots,
+  pricing, billableItems, procedurePlans, attachments, treatmentPlans, tasks, approvals, audit, snapshots,
   clinicalTerms,
   meta: { seededAt: new Date().toISOString(), version: 3, product: 'ArogyaFlow' },
 })

@@ -60,6 +60,7 @@ export const TASK_ROUTES = {
   'nursing-clearance': { assignedRole: 'nurse', assignedDepartment: 'IPD', label: 'Nursing discharge clearance' },
   'dental-followup': { assignedRole: 'dentist', assignedDepartment: 'DENT', label: 'Dental follow-up needed' },
   'physio-referral': { assignedRole: 'physiotherapist', assignedDepartment: 'PHYS', label: 'Physiotherapy referral' },
+  'physio-session': { assignedRole: 'physiotherapist', assignedDepartment: 'PHYS', label: 'Physiotherapy session' },
 }
 
 export function buildTask({

@@ -69,6 +69,20 @@ export const attachments = [
   },
 ]
 
+// Physiotherapy treatment plans (§10.6). Krishnan Nair (pat_4 / MRN-0004)
+// already has a seeded post-stroke consultation (con_1, gait training) —
+// this plan is that same care continued under the physio module.
+export const treatmentPlans = [
+  {
+    id: 'tp_1', patientId: 'pat_4', mrn: 'MRN-0004', department: 'PHYS',
+    referralId: null, diagnosis: 'Hemiparesis, recovering — post-stroke',
+    goals: 'Independent ambulation without an assistive device',
+    plannedSessions: 12, frequency: '3x/week for 4 weeks', packageId: null,
+    status: 'active', outcomeSummary: '',
+    createdBy: 'Dr. Kavya Nair', createdAt: daysFromNow(-2), updatedAt: daysFromNow(-2),
+  },
+]
+
 export const tasks = [
   { id: 'tsk_1', type: 'lab-request', label: 'Lab test requested', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'lab', assignedDepartment: 'DIAG', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'lab_3', notes: 'Vitamin D for IPD Panchakarma patient.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },
   { id: 'tsk_2', type: 'pharmacy-dispense', label: 'Prescription to dispense', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'pharmacy', assignedDepartment: 'PHAR', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'rx_3', notes: 'Ksheerabala 101 + Ashwagandha.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },

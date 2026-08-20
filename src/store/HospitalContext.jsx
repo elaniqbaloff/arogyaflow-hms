@@ -33,7 +33,7 @@ function loadState() {
 // Guarantee newer collections exist even when loading older saved state.
 function ensureCollections(s) {
   const defaults = buildInitialState()
-  const keys = ['pricing', 'billableItems', 'procedurePlans', 'attachments', 'tasks', 'approvals', 'audit', 'snapshots',
+  const keys = ['pricing', 'billableItems', 'procedurePlans', 'attachments', 'treatmentPlans', 'tasks', 'approvals', 'audit', 'snapshots',
     'patients', 'episodes', 'beds', 'appointments', 'consultations', 'prescriptions',
     'medicines', 'labTests', 'vitals', 'nursingNotes', 'therapies', 'bills', 'users',
     'doctors', 'nurses', 'departments', 'clinicalTerms']
