@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download, Smile, Activity, TrendingDown, UserX, PackageCheck } from 'lucide-react'
+import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download, Smile, Activity, TrendingDown, UserX, PackageCheck, Timer, AlertTriangle } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { PageHeader, StatCard, Field, Input, Badge } from '../components/ui/primitives'
 import { inr, formatDate, today } from '../lib/utils'
@@ -11,6 +11,10 @@ import { computeBill } from '../lib/billing'
 import { exportCsv } from '../lib/csv'
 
 const GREENS = ['#21664c', '#2f8060', '#4e9d78', '#7dbd9d', '#d8a73e', '#c08f2b', '#a07423']
+
+// Diagnostics TAT (§11 Phase 7d) — pure ISO-timestamp arithmetic, hoisted so
+// both the report's aggregation and its CSV export share one implementation.
+const hoursBetween = (a, b) => (new Date(b) - new Date(a)) / 36e5
 
 export default function Reports() {
   const { state } = useHospital()
@@ -105,6 +109,29 @@ export default function Reports() {
     const noShowSessions = pastSessions.filter((a) => a.status === 'scheduled')
     const noShowRate = pastSessions.length ? Math.round((noShowSessions.length / pastSessions.length) * 100) : null
 
+    // Diagnostics / TAT (§11 Phase 7d) — turnaround between the sample-state
+    // pipeline's timestamps (7a/7c). ordered→collected is an approximation:
+    // requestedOn is date-only (no time component), unlike collectedAt/
+    // resultedAt/acknowledgedAt which are full ISO timestamps set by the
+    // verbs themselves — same honest-proxy convention as 6e's no-show rate,
+    // not a precise reading. The other two intervals are exact.
+    const labInRange = state.labTests.filter((t) => inRange(t.requestedOn))
+    const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null)
+    const avgOrderToCollect = avg(
+      labInRange.filter((t) => t.collectedAt)
+        .map((t) => hoursBetween(`${t.requestedOn}T00:00:00`, t.collectedAt))
+        .filter((h) => h >= 0)
+    )
+    const avgCollectToResult = avg(
+      labInRange.filter((t) => t.collectedAt && t.resultedAt).map((t) => hoursBetween(t.collectedAt, t.resultedAt))
+    )
+    const avgResultToAck = avg(
+      labInRange.filter((t) => t.resultedAt && t.acknowledgedAt).map((t) => hoursBetween(t.resultedAt, t.acknowledgedAt))
+    )
+    const labStatusCounts = {}
+    labInRange.forEach((t) => { labStatusCounts[t.status] = (labStatusCounts[t.status] || 0) + 1 })
+    const criticalCount = labInRange.filter((t) => t.critical).length
+
     return {
       revenue, billed, revenueData, patientData,
       stockData: [{ name: 'Ayurveda', value: ayur }, { name: 'Modern', value: modern }],
@@ -118,6 +145,7 @@ export default function Reports() {
       dentalFollowupTasks, dentalFollowupDone, dentalFollowupRate,
       physioReferrals, referralsBySource, sessionsPerTherapistData, packages, packagesLowBalance,
       completedPlans, avgPainReduction, goalAchievementCounts, physioRevenue, noShowRate, pastSessions,
+      labInRange, avgOrderToCollect, avgCollectToResult, avgResultToAck, labStatusCounts, criticalCount,
     }
   }, [state, from, to])
 
@@ -172,9 +200,19 @@ export default function Reports() {
     { label: 'Functional Score', value: 'functionalScore' }, { label: 'Completed', value: (p) => (p.updatedAt || '').slice(0, 10) },
   ], data.completedPlans)
 
+  const csvDiagnostics = () => exportCsv('diagnostics_tat', [
+    { label: 'Test', value: 'testName' }, { label: 'Patient', value: (t) => patientName(t.patientId) },
+    { label: 'Requested', value: 'requestedOn' }, { label: 'Status', value: 'status' },
+    { label: 'Panel', value: (t) => t.panelLabel || '' },
+    { label: 'Collected→Resulted (h)', value: (t) => (t.collectedAt && t.resultedAt) ? hoursBetween(t.collectedAt, t.resultedAt).toFixed(1) : '' },
+    { label: 'Resulted→Acknowledged (h)', value: (t) => (t.resultedAt && t.acknowledgedAt) ? hoursBetween(t.resultedAt, t.acknowledgedAt).toFixed(1) : '' },
+    { label: 'Critical', value: (t) => (t.critical ? 'Yes' : 'No') },
+  ], data.labInRange)
+
   const exports = [
     ['Patients', csvPatients], ['Billing', csvBilling], ['Appointments', csvAppointments],
     ['IPD Records', csvIpd], ['Panchakarma', csvTherapy], ['Dental Procedures', csvDental], ['Physio Outcomes', csvPhysio],
+    ['Diagnostics TAT', csvDiagnostics],
   ]
 
   return (
@@ -394,6 +432,49 @@ export default function Reports() {
             <Badge tone="rose">Not met: {data.goalAchievementCounts['not-met']}</Badge>
           </div>
         )}
+      </div>
+
+      {/* Diagnostics / TAT (§11 Phase 7d) */}
+      <div className="mt-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Timer size={18} className="text-brand-700" />
+          <h2 className="font-display text-lg font-semibold text-brand-900">Diagnostics — Turnaround Time</h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard
+            label="Avg. Order → Collect" value={data.avgOrderToCollect == null ? '—' : `${data.avgOrderToCollect.toFixed(1)}h`}
+            icon={Timer} tone="sky" sub="Approximate — order date has no time component"
+          />
+          <StatCard
+            label="Avg. Collect → Result" value={data.avgCollectToResult == null ? '—' : `${data.avgCollectToResult.toFixed(1)}h`}
+            icon={FlaskConical} tone="brand"
+          />
+          <StatCard
+            label="Avg. Result → Acknowledge" value={data.avgResultToAck == null ? '—' : `${data.avgResultToAck.toFixed(1)}h`}
+            icon={CalendarCheck} tone="gold"
+          />
+          <StatCard label="Critical Results" value={data.criticalCount} icon={AlertTriangle} tone="rose" sub={`${data.labInRange.length} test(s) in period`} />
+        </div>
+
+        <div className="mt-4 card overflow-hidden">
+          <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Tests by Sample State</h3></div>
+          {data.labInRange.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink/40">No lab tests requested in this period.</p>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-cream/60"><tr><th className="th">State</th><th className="th text-right">Tests</th></tr></thead>
+              <tbody className="divide-y divide-sand">
+                {Object.entries(data.labStatusCounts).map(([status, count]) => (
+                  <tr key={status} className="hover:bg-cream/40">
+                    <td className="td"><Badge status={status} /></td>
+                    <td className="td text-right">{count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </>
   )
