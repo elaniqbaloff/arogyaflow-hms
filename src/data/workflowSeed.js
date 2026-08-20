@@ -83,6 +83,41 @@ export const treatmentPlans = [
   },
 ]
 
+// Physiotherapy progress notes (§10.7) — per-session SOAP-lite notes.
+// These predate Phase 6b's session-appointment/task linkage (no
+// appointmentId/taskId), representing the sessions already implied by
+// tp_1's history before formal scheduling existed — showing a real
+// pain-reduction trend (7 → 6 → 5) is the point of seeding these at all.
+export const progressNotes = [
+  {
+    id: 'pn_1', patientId: 'pat_4', mrn: 'MRN-0004', treatmentPlanId: 'tp_1',
+    appointmentId: null, taskId: null, painScore: 7,
+    keyRomLabel: 'Hip flexion', keyRomDegrees: 60,
+    notesDone: 'Gait training with parallel bars, passive ROM exercises.',
+    notesResponse: 'Tolerated well, mild fatigue after 20 minutes.',
+    nextSessionFocus: 'Progress to single-point cane, add resistance band work.',
+    writtenBy: 'Dr. Kavya Nair', createdAt: daysFromNow(-6),
+  },
+  {
+    id: 'pn_2', patientId: 'pat_4', mrn: 'MRN-0004', treatmentPlanId: 'tp_1',
+    appointmentId: null, taskId: null, painScore: 6,
+    keyRomLabel: 'Hip flexion', keyRomDegrees: 75,
+    notesDone: 'Ambulation with single-point cane, resistance band strengthening.',
+    notesResponse: 'Improved confidence, reduced fear of falling.',
+    nextSessionFocus: 'Begin unsupported standing balance drills.',
+    writtenBy: 'Dr. Kavya Nair', createdAt: daysFromNow(-4),
+  },
+  {
+    id: 'pn_3', patientId: 'pat_4', mrn: 'MRN-0004', treatmentPlanId: 'tp_1',
+    appointmentId: null, taskId: null, painScore: 5,
+    keyRomLabel: 'Hip flexion', keyRomDegrees: 85,
+    notesDone: 'Unsupported standing balance, 20m walk without aid attempted.',
+    notesResponse: 'Managed 15m unaided before needing support.',
+    nextSessionFocus: 'Continue unaided walking distance progression.',
+    writtenBy: 'Dr. Kavya Nair', createdAt: daysFromNow(-2),
+  },
+]
+
 export const tasks = [
   { id: 'tsk_1', type: 'lab-request', label: 'Lab test requested', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'lab', assignedDepartment: 'DIAG', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'lab_3', notes: 'Vitamin D for IPD Panchakarma patient.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },
   { id: 'tsk_2', type: 'pharmacy-dispense', label: 'Prescription to dispense', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'pharmacy', assignedDepartment: 'PHAR', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'rx_3', notes: 'Ksheerabala 101 + Ashwagandha.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },

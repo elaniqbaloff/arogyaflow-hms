@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts'
+import {
   Users, Plus, Pencil, Archive, ArchiveRestore, Eye, BedDouble, Activity, FileText, Pill,
   FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle,
   User, Phone, HeartPulse, ClipboardList, IdCard, Venus, NotebookPen, AlertTriangle, ShieldAlert,
-  Gauge,
+  Gauge, TrendingDown, TrendingUp,
 } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
@@ -602,6 +605,26 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   const bills = state.bills.filter((b) => b.patientId === patient.id)
   const activeIpd = eps.find((e) => e.type === 'IPD' && e.status === 'admitted')
 
+  // Physio tracking (§10.3) — pain trend combines painScore captured on
+  // physio-assessment consultations with the score re-captured on each
+  // progress note; ROM trend comes only from notes' optional "key ROM".
+  const physioPlans = (state.treatmentPlans || []).filter((p) => p.patientId === patient.id)
+  const physioNotes = (state.progressNotes || []).filter((n) => n.patientId === patient.id)
+  const painTrend = useMemo(() => {
+    const fromConsults = cons
+      .filter((c) => c.painScore !== undefined && c.painScore !== '' && c.painScore != null)
+      .map((c) => ({ date: c.date, pain: Number(c.painScore) }))
+    const fromNotes = physioNotes.map((n) => ({ date: (n.createdAt || '').slice(0, 10), pain: n.painScore }))
+    return [...fromConsults, ...fromNotes].filter((p) => p.date).sort((a, b) => a.date.localeCompare(b.date))
+  }, [cons, physioNotes])
+  const romTrend = useMemo(() => {
+    return physioNotes
+      .filter((n) => n.keyRomDegrees != null)
+      .map((n) => ({ date: (n.createdAt || '').slice(0, 10), degrees: n.keyRomDegrees, label: n.keyRomLabel }))
+      .filter((p) => p.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [physioNotes])
+
   const isFemale = patient.gender === 'Female'
   const pregnant = isFemale && patient.female.pregnancyStatus === 'Pregnant'
   const flagAllergy = patient.allergies && !/^(none|nil|na|n\/a)$/i.test(patient.allergies.trim())
@@ -638,6 +661,7 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
     ['medical', 'Medical'],
     ['clinical', `Clinical (${cons.length + rxs.length + labs.length})`],
     ['episodes', `Visits (${eps.length})`],
+    ...(physioPlans.length > 0 ? [['physio', 'Physio']] : []),
     ['timeline', `Timeline (${timeline.length})`],
     ['billing', `Billing (${bills.length})`],
   ]
@@ -848,6 +872,79 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {tab === 'physio' && (
+        <div className="space-y-4">
+          {physioPlans.map((plan) => (
+            <div key={plan.id} className="rounded-lg border border-sand bg-cream/40 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-brand-900">{plan.diagnosis}</p>
+                <Badge status={plan.status} />
+              </div>
+              <p className="text-xs text-ink/50">{plan.goals}</p>
+            </div>
+          ))}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="card p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-900">
+                <TrendingDown size={15} className="text-rose-500" /> Pain Trend
+              </div>
+              {painTrend.length < 2 ? (
+                <p className="py-8 text-center text-sm text-ink/40">Not enough recorded sessions yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={painTrend} margin={{ left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#efe9db" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#1d272399' }} tickFormatter={(d) => formatDate(d)} />
+                    <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#1d272399' }} />
+                    <Tooltip labelFormatter={(d) => formatDate(d)} formatter={(v) => [`${v}/10`, 'Pain']} contentStyle={{ borderRadius: 12, border: '1px solid #efe9db' }} />
+                    <Line type="monotone" dataKey="pain" stroke="#e11d48" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="card p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-900">
+                <TrendingUp size={15} className="text-brand-600" /> ROM Trend
+              </div>
+              {romTrend.length < 2 ? (
+                <p className="py-8 text-center text-sm text-ink/40">No key ROM re-captured yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={romTrend} margin={{ left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#efe9db" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#1d272399' }} tickFormatter={(d) => formatDate(d)} />
+                    <YAxis tick={{ fontSize: 11, fill: '#1d272399' }} />
+                    <Tooltip labelFormatter={(d) => formatDate(d)} formatter={(v, n, p) => [`${v}°`, p.payload.label || 'ROM']} contentStyle={{ borderRadius: 12, border: '1px solid #efe9db' }} />
+                    <Line type="monotone" dataKey="degrees" stroke="#21664c" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-900"><NotebookPen size={15} className="text-brand-700" /> Progress Notes</p>
+            {physioNotes.length === 0 ? <p className="pl-1 text-sm text-ink/40">None yet.</p> : (
+              <ul className="divide-y divide-sand">
+                {[...physioNotes].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).map((n) => (
+                  <li key={n.id} className="py-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-brand-900">Pain {n.painScore}/10{n.keyRomLabel && ` · ${n.keyRomLabel} ${n.keyRomDegrees}°`}</p>
+                      <span className="text-xs text-ink/40">{formatDate(n.createdAt)} · {n.writtenBy}</span>
+                    </div>
+                    {n.notesDone && <p className="text-sm text-ink/60">{n.notesDone}</p>}
+                    {n.notesResponse && <p className="text-sm text-ink/55"><span className="text-ink/40">Response:</span> {n.notesResponse}</p>}
+                    {n.nextSessionFocus && <p className="text-sm text-ink/55"><span className="text-ink/40">Next focus:</span> {n.nextSessionFocus}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       {tab === 'timeline' && (

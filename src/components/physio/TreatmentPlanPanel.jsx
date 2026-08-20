@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Plus, CalendarPlus } from 'lucide-react'
+import { ClipboardList, Plus, CalendarPlus, NotebookPen, Check } from 'lucide-react'
 import { useHospital } from '../../store/HospitalContext'
 import { useAuth } from '../../store/AuthContext'
 import { can } from '../../config/roles'
@@ -7,6 +7,8 @@ import { useToast } from '../ui/Toast'
 import { Badge, Select, Input, Textarea, EmptyState } from '../ui/primitives'
 import { TASK_STATUS_TONES } from '../../config/statusTones'
 import { formatDate, today, uid } from '../../lib/utils'
+
+const blankNoteDraft = () => ({ painScore: '', keyRomLabel: '', keyRomDegrees: '', notesDone: '', notesResponse: '', nextSessionFocus: '' })
 
 const STATUS_OPTIONS = ['active', 'completed', 'discontinued']
 
@@ -163,17 +165,24 @@ export function TreatmentPlanPanel({ dept }) {
 }
 
 function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
-  const { state } = useHospital()
+  const { state, repos } = useHospital()
+  const { user } = useAuth()
   const toast = useToast()
   const [scheduling, setScheduling] = useState(false)
   const [sessionDraft, setSessionDraft] = useState({ date: today(), time: '10:00' })
+  const [noteFor, setNoteFor] = useState(null)
+  const [noteDraft, setNoteDraft] = useState(blankNoteDraft())
 
   const sessions = useMemo(
     () => (state.appointments || [])
       .filter((a) => a.treatmentPlanId === plan.id)
-      .map((a) => ({ ...a, task: (state.tasks || []).find((t) => t.type === 'physio-session' && t.relatedId === a.id) }))
+      .map((a) => ({
+        ...a,
+        task: (state.tasks || []).find((t) => t.type === 'physio-session' && t.relatedId === a.id),
+        note: (state.progressNotes || []).find((n) => n.appointmentId === a.id),
+      }))
       .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)),
-    [state.appointments, state.tasks, plan.id]
+    [state.appointments, state.tasks, state.progressNotes, plan.id]
   )
   const completedCount = sessions.filter((s) => s.task?.status === 'Completed').length
 
@@ -181,6 +190,26 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
     if (!sessionDraft.date || !sessionDraft.time) { toast('Pick a date and time.', 'error'); return }
     onScheduleSession(plan, sessionDraft.date, sessionDraft.time)
     setScheduling(false)
+  }
+
+  // Per-session SOAP-lite note (§10.7) — re-captures painScore (+ optional
+  // key ROM) so the patient's physio tab can render a trend from it.
+  const openNoteFor = (session) => { setNoteDraft(blankNoteDraft()); setNoteFor(session.id) }
+
+  const submitNote = (session) => {
+    if (noteDraft.painScore === '') { toast('Enter a pain score.', 'error'); return }
+    repos.progressNotes.create({
+      patientId: plan.patientId, mrn: plan.mrn, treatmentPlanId: plan.id,
+      appointmentId: session.id, taskId: session.task?.id || null,
+      painScore: Number(noteDraft.painScore),
+      keyRomLabel: noteDraft.keyRomLabel.trim() || null,
+      keyRomDegrees: noteDraft.keyRomDegrees === '' ? null : Number(noteDraft.keyRomDegrees),
+      notesDone: noteDraft.notesDone.trim(), notesResponse: noteDraft.notesResponse.trim(),
+      nextSessionFocus: noteDraft.nextSessionFocus.trim(),
+      writtenBy: user.name, createdAt: new Date().toISOString(),
+    })
+    toast('Progress note saved.')
+    setNoteFor(null)
   }
 
   return (
@@ -208,9 +237,37 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
       {sessions.length > 0 && (
         <ul className="divide-y divide-sand border-t border-sand">
           {sessions.map((s) => (
-            <li key={s.id} className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-ink/70">{formatDate(s.date)} · {s.time}</span>
-              <Badge tone={TASK_STATUS_TONES[s.task?.status] || 'gold'}>{s.task?.status || 'Pending'}</Badge>
+            <li key={s.id} className="px-3 py-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-ink/70">{formatDate(s.date)} · {s.time}</span>
+                <div className="flex items-center gap-2">
+                  <Badge tone={TASK_STATUS_TONES[s.task?.status] || 'gold'}>{s.task?.status || 'Pending'}</Badge>
+                  {canManage && s.task?.status === 'Completed' && (
+                    s.note ? (
+                      <span className="flex items-center gap-1 text-xs text-brand-700"><Check size={13} /> Noted</span>
+                    ) : (
+                      <button className="btn-ghost btn-sm" onClick={() => openNoteFor(s)}><NotebookPen size={13} /> Add note</button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {noteFor === s.id && (
+                <div className="mt-2 space-y-2 rounded-lg bg-cream/60 p-3">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Input type="number" min="0" max="10" placeholder="Pain 0–10" value={noteDraft.painScore} onChange={(e) => setNoteDraft({ ...noteDraft, painScore: e.target.value })} />
+                    <Input placeholder="Key ROM (optional)" value={noteDraft.keyRomLabel} onChange={(e) => setNoteDraft({ ...noteDraft, keyRomLabel: e.target.value })} />
+                    <Input type="number" placeholder="Degrees" value={noteDraft.keyRomDegrees} onChange={(e) => setNoteDraft({ ...noteDraft, keyRomDegrees: e.target.value })} />
+                  </div>
+                  <Textarea placeholder="What was done…" value={noteDraft.notesDone} onChange={(e) => setNoteDraft({ ...noteDraft, notesDone: e.target.value })} />
+                  <Textarea placeholder="Patient response…" value={noteDraft.notesResponse} onChange={(e) => setNoteDraft({ ...noteDraft, notesResponse: e.target.value })} />
+                  <Textarea placeholder="Next session focus…" value={noteDraft.nextSessionFocus} onChange={(e) => setNoteDraft({ ...noteDraft, nextSessionFocus: e.target.value })} />
+                  <div className="flex gap-2">
+                    <button className="btn-primary btn-sm" onClick={() => submitNote(s)}>Save note</button>
+                    <button className="btn-outline btn-sm" onClick={() => setNoteFor(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
