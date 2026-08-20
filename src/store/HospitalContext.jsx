@@ -42,6 +42,7 @@ function ensureCollections(s) {
   if (!merged.meta) merged.meta = defaults.meta
   merged.tasks = (merged.tasks || []).map(migrateTask)
   merged.departments = (merged.departments || []).map((d) => migrateDepartment(d, defaults.departments))
+  merged.labTests = (merged.labTests || []).map(migrateLabTest)
   return merged
 }
 
@@ -89,6 +90,26 @@ function migrateTask(task) {
     completedAt: task.completedAt ?? null,
     blockedReason: task.blockedReason ?? null,
   }
+}
+
+// Idempotent per-lab-test migration (§11 Phase 7a): replaces the old flat
+// requested/in-progress/completed status with the sample-state pipeline
+// (ordered→collected→resulted→acknowledged, or cancelled), unifying it with
+// the sampleStatus field seed.js had already been stamping but nothing ever
+// read. A record with a saved result is assumed resulted-but-not-yet-
+// acknowledged rather than acknowledged — acknowledgement is a distinct,
+// explicit action even for legacy data. Leaves already-migrated records
+// (status already one of the 5 new values) untouched.
+const LAB_STATUSES = new Set(['ordered', 'collected', 'resulted', 'acknowledged', 'cancelled'])
+function migrateLabTest(test) {
+  if (LAB_STATUSES.has(test.status)) return test
+  const { sampleStatus, ...rest } = test
+  const status = test.result?.trim()
+    ? 'resulted'
+    : sampleStatus === 'collected' || test.status === 'in-progress'
+      ? 'collected'
+      : 'ordered'
+  return { ...rest, status }
 }
 
 export function HospitalProvider({ children }) {

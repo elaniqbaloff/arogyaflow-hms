@@ -353,6 +353,50 @@ export function buildRepositories(prim) {
     },
   }
 
+  const patientMrn = (patientId) => (prim.getState().patients || []).find((p) => p.id === patientId)?.mrn || null
+
+  // Records an audit row for a lab-test lifecycle verb, same shape logAudit uses.
+  const labAudit = (user, action, test, oldValue, newValue, remarks) => {
+    prim.add('audit', buildAudit({
+      user, action, module: 'lab', recordId: test.id, mrn: patientMrn(test.patientId),
+      oldValue: oldValue ?? null, newValue: newValue ?? null, remarks: remarks || '',
+    }))
+  }
+
+  // Sample-state pipeline (§11 Phase 7a): a one-way state machine, same
+  // shape as procedurePlans' ITEM_TRANSITIONS above — capability-gated, no
+  // per-record ownership/claim concept (a lab test belongs to whichever lab
+  // tech is working the worklist, not a locked queue). Cancellable only
+  // before a result exists, matching the dental "cancellable up to
+  // in-progress" precedent — once resulted, the record is finalized data,
+  // not something to silently discard.
+  const LAB_TRANSITIONS = {
+    ordered: ['collected', 'cancelled'],
+    collected: ['resulted', 'cancelled'],
+    resulted: ['acknowledged'],
+    acknowledged: [],
+    cancelled: [],
+  }
+
+  const transitionLabTest = (id, toStatus, user, extra = {}) => {
+    const test = base.labTests.byId(id)
+    if (!test) return { ok: false, reason: 'not-found' }
+    if (!(LAB_TRANSITIONS[test.status] || []).includes(toStatus)) return { ok: false, reason: 'invalid-status' }
+    const now = new Date().toISOString()
+    prim.update('labTests', id, { ...extra, status: toStatus, updatedAt: now })
+    labAudit(user, `labTest.${toStatus}`, test, test.status, toStatus, extra.reason)
+    return { ok: true }
+  }
+
+  base.labTests = {
+    ...base.labTests,
+    collect: (id, user) => transitionLabTest(id, 'collected', user, { collectedAt: new Date().toISOString() }),
+    resultEntry: (id, user, resultText) =>
+      transitionLabTest(id, 'resulted', user, { result: resultText, resultedAt: new Date().toISOString() }),
+    acknowledge: (id, user) => transitionLabTest(id, 'acknowledged', user, { acknowledgedAt: new Date().toISOString() }),
+    cancel: (id, user, reason) => transitionLabTest(id, 'cancelled', user, { reason }),
+  }
+
   base.approvals = {
     ...base.approvals,
     pending: () => base.approvals.where((a) => a.status === 'Pending'),

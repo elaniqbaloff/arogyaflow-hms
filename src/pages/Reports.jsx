@@ -109,7 +109,7 @@ export default function Reports() {
       revenue, billed, revenueData, patientData,
       stockData: [{ name: 'Ayurveda', value: ayur }, { name: 'Modern', value: modern }],
       lowStock: state.medicines.filter((m) => m.stock <= m.reorderLevel).length,
-      labPending: state.labTests.filter((t) => t.status !== 'completed').length,
+      labPending: state.labTests.filter((t) => !['acknowledged', 'cancelled'].includes(t.status)).length,
       pendingDues: billed - revenue,
       activeIpd, discharged, conversions, opdCount,
       therapyDone: state.therapies.filter((t) => t.status === 'completed').length,

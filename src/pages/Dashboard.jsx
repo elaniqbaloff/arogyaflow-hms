@@ -36,7 +36,7 @@ export default function Dashboard() {
     )
     const lowStock = state.medicines.filter((x) => x.stock <= x.reorderLevel)
     const pendingRx = state.prescriptions.filter((p) => p.status === 'pending')
-    const pendingLab = state.labTests.filter((t) => t.status !== 'completed')
+    const pendingLab = state.labTests.filter((t) => !['acknowledged', 'cancelled'].includes(t.status))
     const pendingCons = scopedConsultations.filter((c) => c.status === 'pending')
 
     // revenue by department
@@ -105,7 +105,7 @@ export default function Dashboard() {
           </>
         )}
         {showLab && (
-          <StatCard label="Pending Lab Tests" value={m.pendingLab.length} icon={FlaskConical} tone="sky" sub="Requested / in-progress" />
+          <StatCard label="Pending Lab Tests" value={m.pendingLab.length} icon={FlaskConical} tone="sky" sub="Ordered / collected / resulted" />
         )}
         {showFinance && (
           <>

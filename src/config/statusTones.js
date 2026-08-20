@@ -20,4 +20,7 @@ export const STATUS_TONES = {
   paid: 'green', partial: 'gold', dispensed: 'green', active: 'green',
   disabled: 'slate', requested: 'gold', 'in-progress': 'sky',
   proposed: 'gold', accepted: 'sky',
+  // Lab sample-state pipeline (§11 Phase 7a): ordered/resulted still need
+  // action (gold), collected is in-flight (sky), acknowledged is closed out (green).
+  ordered: 'gold', collected: 'sky', resulted: 'gold', acknowledged: 'green',
 }

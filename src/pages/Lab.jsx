@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FlaskConical, Plus, Pencil, Trash2, FileCheck2 } from 'lucide-react'
+import { FlaskConical, Plus, Pencil, Trash2, FileCheck2, TestTube2, Check, X } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
@@ -11,11 +11,22 @@ import {
 import { SmartField } from '../components/ui/SmartField'
 import { formatDate, today, uid } from '../lib/utils'
 
-const STATUSES = ['requested', 'in-progress', 'completed']
 const COMMON_TESTS = ['Complete Blood Count', 'HbA1c', 'Lipid Profile', 'Liver Function Test', 'Thyroid Profile', 'Vitamin D', 'Urine Routine']
 
+// Which single-click action(s) a test's current sample-state allows, per the
+// one-way pipeline in repositories.js (ordered → collected → resulted →
+// acknowledged, cancellable up to collected). "Enter Result" isn't a
+// single-click verb — it opens the result modal, which calls resultEntry
+// itself on save.
+const LAB_ACTIONS = {
+  ordered: [{ verb: 'collect', label: 'Mark Collected', icon: TestTube2 }],
+  collected: [{ verb: null, label: 'Enter Result', icon: FileCheck2, opensResultModal: true }],
+  resulted: [{ verb: 'acknowledge', label: 'Acknowledge', icon: Check }],
+}
+const TERMINAL_STATUSES = ['acknowledged', 'cancelled']
+
 export default function Lab() {
-  const { state, add, update, remove, createTask, logAudit } = useHospital()
+  const { state, repos, createTask, logAudit } = useHospital()
   const { patientById, patientName } = useLookups()
   const { user } = useAuth()
   const toast = useToast()
@@ -30,45 +41,52 @@ export default function Lab() {
 
   const list = useMemo(() => {
     return state.labTests
-      .filter((t) => (tab === 'pending' ? t.status !== 'completed' : tab === 'completed' ? t.status === 'completed' : true))
+      .filter((t) => (tab === 'pending' ? !TERMINAL_STATUSES.includes(t.status) : tab === 'completed' ? TERMINAL_STATUSES.includes(t.status) : true))
       .filter((t) => !query || patientName(t.patientId).toLowerCase().includes(query.toLowerCase()) || t.testName.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => b.requestedOn.localeCompare(a.requestedOn))
   }, [state.labTests, tab, query, patientName])
 
   const blank = {
     patientId: state.patients[0]?.id || '', doctorId: user.id, testName: COMMON_TESTS[0],
-    department: 'Diagnostics', requestedOn: today(), status: 'requested', result: '',
+    department: 'Diagnostics', requestedOn: today(), result: '',
   }
 
   const save = () => {
     const d = form.data
     if (!d.patientId || !d.testName.trim()) { toast('Patient and test name are required.', 'error'); return }
     if (form.mode === 'add') {
-      const id = uid('lab')
-      add('labTests', { ...d, id })
+      const id = repos.labTests.create({ ...d, status: 'ordered' })
       const mrn = patientById[d.patientId]?.mrn
       // Doctor → Lab handoff: create a pending lab task + audit entry.
       createTask({ type: 'lab-request', mrn, sourceRole: user.role, createdBy: user.name, relatedId: id, notes: `${d.testName} for ${patientName(d.patientId)}` })
       logAudit({ user, action: 'lab.request.created', module: 'lab', recordId: id, mrn, newValue: d.testName })
       toast(`Test "${d.testName}" requested — Lab notified.`)
-    } else { update('labTests', d.id, d); toast('Test request updated.') }
+    } else { repos.labTests.update(d.id, d); toast('Test request updated.') }
     setForm(null)
   }
 
-  const setStatus = (t, status) => {
-    update('labTests', t.id, { status })
-    toast(`"${t.testName}" → ${status}.`)
+  const doVerb = (verb, test) => {
+    const result = repos.labTests[verb](test.id, user)
+    if (!result.ok) { toast(`Couldn't update "${test.testName}" (${result.reason}).`, 'error'); return }
+    toast(`"${test.testName}" updated.`)
   }
 
   const saveResult = () => {
-    update('labTests', result.id, { result: result.result, status: 'completed' })
+    const outcome = repos.labTests.resultEntry(result.id, user, result.result)
+    if (!outcome.ok) { toast(`Couldn't save result (${outcome.reason}).`, 'error'); return }
     toast(`Result posted for "${result.testName}" — linked to patient record.`)
     setResult(null)
   }
 
+  const cancelTest = (test) => {
+    const outcome = repos.labTests.cancel(test.id, user, 'Cancelled from Lab worklist')
+    if (!outcome.ok) { toast(`Couldn't cancel "${test.testName}" (${outcome.reason}).`, 'error'); return }
+    toast(`"${test.testName}" cancelled.`, 'info')
+  }
+
   const counts = {
-    pending: state.labTests.filter((t) => t.status !== 'completed').length,
-    completed: state.labTests.filter((t) => t.status === 'completed').length,
+    pending: state.labTests.filter((t) => !TERMINAL_STATUSES.includes(t.status)).length,
+    completed: state.labTests.filter((t) => TERMINAL_STATUSES.includes(t.status)).length,
   }
 
   return (
@@ -115,18 +133,20 @@ export default function Lab() {
                     <td className="td">{patientName(t.patientId)}</td>
                     <td className="td text-ink/50">{formatDate(t.requestedOn)}</td>
                     <td className="td max-w-[220px] truncate text-ink/60">{t.result || '—'}</td>
-                    <td className="td">
-                      {canManage ? (
-                        <Select value={t.status} onChange={(e) => setStatus(t, e.target.value)} className="w-auto py-1 text-xs">
-                          {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
-                        </Select>
-                      ) : <Badge status={t.status} />}
-                    </td>
+                    <td className="td"><Badge status={t.status} /></td>
                     <td className="td">
                       <div className="flex items-center justify-end gap-1">
-                        {canManage && (
-                          <button className="btn-ghost btn-sm text-brand-700" title="Enter result" onClick={() => setResult({ ...t })}>
-                            <FileCheck2 size={15} />
+                        {canManage && (LAB_ACTIONS[t.status] || []).map((a) => (
+                          <button
+                            key={a.label} className="btn-ghost btn-sm text-brand-700" title={a.label}
+                            onClick={() => (a.opensResultModal ? setResult({ ...t }) : doVerb(a.verb, t))}
+                          >
+                            <a.icon size={15} />
+                          </button>
+                        ))}
+                        {canManage && ['ordered', 'collected'].includes(t.status) && (
+                          <button className="btn-ghost btn-sm text-rose-600" title="Cancel" onClick={() => cancelTest(t)}>
+                            <X size={15} />
                           </button>
                         )}
                         {canManage && (
@@ -172,11 +192,6 @@ export default function Lab() {
             <Field label="Requested on">
               <Input type="date" value={form.data.requestedOn} onChange={(e) => setForm({ ...form, data: { ...form.data, requestedOn: e.target.value } })} />
             </Field>
-            <Field label="Status">
-              <Select value={form.data.status} onChange={(e) => setForm({ ...form, data: { ...form.data, status: e.target.value } })}>
-                {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
-              </Select>
-            </Field>
           </div>
         )}
       </Modal>
@@ -189,7 +204,7 @@ export default function Lab() {
         subtitle={result ? `${result.testName} · ${patientName(result.patientId)}` : ''}
         footer={<>
           <button className="btn-outline" onClick={() => setResult(null)}>Cancel</button>
-          <button className="btn-primary" onClick={saveResult}>Save &amp; Mark Completed</button>
+          <button className="btn-primary" onClick={saveResult}>Save Result</button>
         </>}
       >
         {result && (
@@ -202,7 +217,7 @@ export default function Lab() {
       <ConfirmDialog
         open={!!confirm}
         onClose={() => setConfirm(null)}
-        onConfirm={() => { remove('labTests', confirm.id); toast('Test request deleted.', 'info') }}
+        onConfirm={() => { repos.labTests.remove(confirm.id); toast('Test request deleted.', 'info') }}
         title="Delete test request?"
         message="This request will be permanently removed."
       />

@@ -184,10 +184,14 @@ export const medicines = [
   { id: 'med_8', name: 'Ksheerabala 101', category: 'ayurveda', unit: 'bottle', stock: 41, reorderLevel: 12, price: 410, expiry: daysFromNow(500) },
 ]
 
+// Sample-state pipeline (§11 Phase 7a): ordered → collected → resulted →
+// acknowledged, or cancelled. lab_1 is left at 'resulted' (not
+// 'acknowledged') even though it has a result on file — acknowledgement is
+// its own explicit doctor action, not implied by a result being posted.
 export const labTests = [
-  { id: 'lab_1', patientId: 'pat_2', doctorId: 'usr_doc2', episodeId: 'ep_2a', testName: 'HbA1c', department: 'Diagnostics', requestedOn: daysFromNow(-29), sampleStatus: 'collected', status: 'completed', result: 'HbA1c 8.1% — above target.' },
-  { id: 'lab_2', patientId: 'pat_5', doctorId: 'usr_doc', episodeId: null, testName: 'Lipid Profile', department: 'Diagnostics', requestedOn: daysFromNow(-7), sampleStatus: 'collected', status: 'in-progress', result: '' },
-  { id: 'lab_3', patientId: 'pat_7', doctorId: 'usr_doc', episodeId: 'ep_7b', testName: 'Vitamin D', department: 'Diagnostics', requestedOn: daysFromNow(-4), sampleStatus: 'pending', status: 'requested', result: '' },
+  { id: 'lab_1', patientId: 'pat_2', doctorId: 'usr_doc2', episodeId: 'ep_2a', testName: 'HbA1c', department: 'Diagnostics', requestedOn: daysFromNow(-29), status: 'resulted', collectedAt: daysFromNow(-28), resultedAt: daysFromNow(-27), result: 'HbA1c 8.1% — above target.' },
+  { id: 'lab_2', patientId: 'pat_5', doctorId: 'usr_doc', episodeId: null, testName: 'Lipid Profile', department: 'Diagnostics', requestedOn: daysFromNow(-7), status: 'collected', collectedAt: daysFromNow(-6), result: '' },
+  { id: 'lab_3', patientId: 'pat_7', doctorId: 'usr_doc', episodeId: 'ep_7b', testName: 'Vitamin D', department: 'Diagnostics', requestedOn: daysFromNow(-4), status: 'ordered', result: '' },
 ]
 
 // Vitals — nurse-entered (Phase 6)
