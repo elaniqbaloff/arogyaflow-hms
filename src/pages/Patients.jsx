@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -12,14 +12,14 @@ import {
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
-import { departmentOptions } from '../config/departmentUtils'
+import { departmentOptions, getDepartment, departmentDotClass } from '../config/departmentUtils'
 import { scopeFilter } from '../services/accessPolicy'
 import { buildJourney } from '../services/journey'
 
-// Journey event type -> icon/tone (§11 Phase 8a). Presentation is
-// deliberately minimal here — department-colored dots, filter chips and
-// click-through are Phase 8b's job; this just keeps the existing Timeline
-// tab rendering correctly against journey.js's new event shape.
+// Journey event type -> icon (§11 Phase 8a/8b). The dot's BACKGROUND color
+// comes from the event's own department config color (departmentDotClass)
+// as of 8b, not a per-type tone — this map only picks which icon glyph
+// renders inside that dot.
 const JOURNEY_ICONS = {
   registration: Users, 'pain-recorded': Gauge, 'initial-assessment': ClipboardList,
   'opd-visit': CalendarDays, 'ipd-admission': BedDouble, 'bed-transfer': BedDouble, 'ipd-discharge': ArrowRightCircle,
@@ -30,15 +30,25 @@ const JOURNEY_ICONS = {
   'lab-request': FlaskConical, 'critical-lab': AlertTriangle, 'dental-followup': Smile, 'package-renewal': Activity,
   'nursing-clearance': HeartPulse, 'billing-clearance': Receipt, 'discharge-clearance': ArrowRightCircle,
 }
-const JOURNEY_TONES = {
-  registration: 'slate', 'pain-recorded': 'gold', 'initial-assessment': 'green',
-  'opd-visit': 'slate', 'ipd-admission': 'sky', 'bed-transfer': 'gold', 'ipd-discharge': 'green',
-  appointment: 'slate', consultation: 'green', prescription: 'gold',
-  'lab-test': 'sky', therapy: 'green', vitals: 'slate', bill: 'gold',
-  'dental-procedure': 'sky', 'physio-referral': 'gold', 'physio-plan-started': 'sky',
-  'physio-plan-completed': 'green', 'physio-session-note': 'slate',
-  'lab-request': 'sky', 'critical-lab': 'gold', 'dental-followup': 'gold', 'package-renewal': 'gold',
-  'nursing-clearance': 'slate', 'billing-clearance': 'gold', 'discharge-clearance': 'green',
+
+// Click-through (§11 Phase 8b) — deliberately scoped to the owning
+// MODULE's page, not a deep link to the exact record: no query-param
+// "jump to this row" mechanism exists yet on any of these pages, and
+// building one for ~6 pages just for this would be a much bigger, more
+// fragile change than the journey tab itself warrants. A patient-level
+// event (registration/pain/initial assessment) has no separate page to
+// link to, so it's intentionally absent from this map — those labels
+// simply don't render as links.
+const JOURNEY_ROUTES = {
+  'opd-visit': '/ipd', 'ipd-admission': '/ipd', 'bed-transfer': '/ipd', 'ipd-discharge': '/ipd',
+  appointment: '/appointments', consultation: '/consultations', prescription: '/pharmacy',
+  'lab-test': '/lab', 'lab-request': '/lab', 'critical-lab': '/lab',
+  therapy: '/therapy', vitals: '/nursing', bill: '/billing',
+  'dental-procedure': '/departments/DENT', 'dental-followup': '/departments/DENT',
+  'physio-referral': '/departments/PHYS', 'physio-plan-started': '/departments/PHYS',
+  'physio-plan-completed': '/departments/PHYS', 'physio-session-note': '/departments/PHYS',
+  'package-renewal': '/departments/PHYS', 'nursing-clearance': '/nursing',
+  'billing-clearance': '/billing', 'discharge-clearance': '/ipd',
 }
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
@@ -619,6 +629,7 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   const { state } = useHospital()
   const { doctorName } = useLookups()
   const [tab, setTab] = useState('overview')
+  const [journeyDeptFilter, setJourneyDeptFilter] = useState('all')
   const patient = withDefaults(raw)
 
   const eps = state.episodes.filter((e) => e.patientId === patient.id)
@@ -662,6 +673,19 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   // every department/collection touching this patient, not just the 9
   // sources this component used to build inline.
   const timeline = useMemo(() => buildJourney(state, patient), [state, patient])
+
+  // Filter chips (§11 Phase 8b) — only departments actually present in
+  // this patient's own journey, not every department in the hospital.
+  const journeyDepts = useMemo(() => {
+    const codes = [...new Set(timeline.map((ev) => ev.department).filter(Boolean))]
+    return codes
+      .map((code) => ({ code, dept: getDepartment(state, code) }))
+      .sort((a, b) => (a.dept?.name || a.code).localeCompare(b.dept?.name || b.code))
+  }, [timeline, state])
+  const visibleTimeline = useMemo(
+    () => (journeyDeptFilter === 'all' ? timeline : timeline.filter((ev) => ev.department === journeyDeptFilter)),
+    [timeline, journeyDeptFilter]
+  )
 
   const TABS = [
     ['overview', 'Overview'],
@@ -955,23 +979,50 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
       )}
 
       {tab === 'timeline' && (
-        <ol className="relative ml-2 border-l-2 border-sand">
-          {timeline.map((ev, i) => {
-            const TONES = { slate: 'bg-slate-100 text-slate-600', sky: 'bg-sky-50 text-sky-600', green: 'bg-brand-50 text-brand-700', gold: 'bg-gold-50 text-gold-700' }
-            const Icon = JOURNEY_ICONS[ev.type] || ClipboardList
-            const tone = JOURNEY_TONES[ev.type] || 'slate'
-            return (
-              <li key={i} className="mb-4 ml-5">
-                <span className={`absolute -left-[13px] flex h-6 w-6 items-center justify-center rounded-full ${TONES[tone]}`}><Icon size={13} /></span>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-brand-900">{ev.label}</p>
-                  <span className="text-xs text-ink/40">{formatDate(ev.at)}</span>
-                </div>
-                {ev.detail && <p className="text-sm text-ink/55">{ev.detail}</p>}
-              </li>
-            )
-          })}
-        </ol>
+        <div>
+          {journeyDepts.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setJourneyDeptFilter('all')}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${journeyDeptFilter === 'all' ? 'bg-brand-700 text-white' : 'bg-sand/60 text-ink/60 hover:text-ink/80'}`}
+              >
+                All ({timeline.length})
+              </button>
+              {journeyDepts.map(({ code, dept }) => (
+                <button
+                  key={code}
+                  onClick={() => setJourneyDeptFilter(code)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition ${journeyDeptFilter === code ? 'bg-brand-700 text-white' : 'bg-sand/60 text-ink/60 hover:text-ink/80'}`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${departmentDotClass(state, code)}`} />
+                  {dept?.name || code}
+                </button>
+              ))}
+            </div>
+          )}
+          <ol className="relative ml-2 border-l-2 border-sand">
+            {visibleTimeline.map((ev, i) => {
+              const Icon = JOURNEY_ICONS[ev.type] || ClipboardList
+              const route = JOURNEY_ROUTES[ev.type]
+              return (
+                <li key={i} className="mb-4 ml-5">
+                  <span className={`absolute -left-[13px] flex h-6 w-6 items-center justify-center rounded-full text-white ${departmentDotClass(state, ev.department)}`}><Icon size={13} /></span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {route ? (
+                      <Link to={route} className="text-sm font-medium text-brand-900 hover:text-brand-700 hover:underline">{ev.label}</Link>
+                    ) : (
+                      <p className="text-sm font-medium text-brand-900">{ev.label}</p>
+                    )}
+                    {ev.status && <Badge status={ev.status} />}
+                    <span className="text-xs text-ink/40">{formatDate(ev.at)}</span>
+                  </div>
+                  {ev.detail && <p className="text-sm text-ink/55">{ev.detail}</p>}
+                </li>
+              )
+            })}
+          </ol>
+          {visibleTimeline.length === 0 && <p className="py-8 text-center text-sm text-ink/40">No events for this filter.</p>}
+        </div>
       )}
 
       {tab === 'billing' && (
