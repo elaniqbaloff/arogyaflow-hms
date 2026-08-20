@@ -4,6 +4,7 @@ import { ROLES } from './config/roles'
 import { AppLayout, RequireAuth, RequireModule, RequireDepartment } from './components/layout/AppLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import CommandCenter from './pages/CommandCenter'
 import Patients from './pages/Patients'
 import Appointments from './pages/Appointments'
 import Consultations from './pages/Consultations'
@@ -33,6 +34,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+        <Route path="/command-center" element={guarded('commandCenter', <CommandCenter />)} />
         <Route path="/dashboard" element={guarded('dashboard', <Dashboard />)} />
         <Route path="/patients" element={guarded('patients', <Patients />)} />
         <Route path="/appointments" element={guarded('appointments', <Appointments />)} />

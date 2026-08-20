@@ -22,6 +22,7 @@ export const MODULES = {
   audit: 'audit',
   reports: 'reports',
   settings: 'settings',
+  commandCenter: 'commandCenter',
 }
 
 // Capabilities shared by dentist/physiotherapist — doctor's clinical set
@@ -55,7 +56,7 @@ export const ROLES = {
     label: 'Management',
     blurb: 'Hospital-wide metrics, reports and oversight.',
     accent: '#7d5a20',
-    modules: ['dashboard', 'patients', 'appointments', 'ipd', 'billing', 'reports', 'tasks', 'approvals', 'audit'],
+    modules: ['commandCenter', 'dashboard', 'patients', 'appointments', 'ipd', 'billing', 'reports', 'tasks', 'approvals', 'audit'],
     capabilities: [
       'patients.read', 'appointments.read', 'ipd.read', 'therapy.read',
       'billing.read', 'reports.read', 'reports.export',
@@ -66,7 +67,10 @@ export const ROLES = {
       'audit.read',
     ],
     scopes: { patients: 'all', appointments: 'all', consultations: 'all', tasks: 'all' },
-    landing: '/dashboard',
+    // §12 Phase 9: management lands on the Command Center, not the generic
+    // Dashboard — 'dashboard' stays in `modules` above so it's still directly
+    // reachable (nav link, deep link), just no longer the default landing.
+    landing: '/command-center',
   },
   doctor: {
     label: 'Doctor / Consultant',

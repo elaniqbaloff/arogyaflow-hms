@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, CalendarDays, Stethoscope, BedDouble,
   HeartPulse, Flower2, Pill, FlaskConical, Receipt, BarChart3, Settings,
-  Bell, CheckSquare, ScrollText,
+  Bell, CheckSquare, ScrollText, Radar,
 } from 'lucide-react'
 
 // Sidebar group order (top to bottom). Kept separate from NAV's own order so
@@ -11,6 +11,7 @@ export const NAV_GROUPS = ['Care', 'Departments', 'Operations', 'Admin']
 // Order = sidebar order within a group. Each entry is filtered per-role via
 // canSeeModule(); `group` buckets it under one of NAV_GROUPS in the sidebar.
 export const NAV = [
+  { key: 'commandCenter', label: 'Command Center', to: '/command-center', icon: Radar, group: 'Care' },
   { key: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, group: 'Care' },
   { key: 'patients', label: 'Patients', to: '/patients', icon: Users, group: 'Care' },
   { key: 'appointments', label: 'Appointments', to: '/appointments', icon: CalendarDays, group: 'Care' },
