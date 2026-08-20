@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import {
   Users, Plus, Pencil, Archive, ArchiveRestore, Eye, BedDouble, Activity, FileText, Pill,
-  FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle,
+  FlaskConical, Receipt, CalendarDays, Flower2, Stethoscope, ArrowRightCircle, Smile,
   User, Phone, HeartPulse, ClipboardList, IdCard, Venus, NotebookPen, AlertTriangle, ShieldAlert,
   Gauge, TrendingDown, TrendingUp,
 } from 'lucide-react'
@@ -14,6 +14,32 @@ import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
 import { departmentOptions } from '../config/departmentUtils'
 import { scopeFilter } from '../services/accessPolicy'
+import { buildJourney } from '../services/journey'
+
+// Journey event type -> icon/tone (§11 Phase 8a). Presentation is
+// deliberately minimal here — department-colored dots, filter chips and
+// click-through are Phase 8b's job; this just keeps the existing Timeline
+// tab rendering correctly against journey.js's new event shape.
+const JOURNEY_ICONS = {
+  registration: Users, 'pain-recorded': Gauge, 'initial-assessment': ClipboardList,
+  'opd-visit': CalendarDays, 'ipd-admission': BedDouble, 'bed-transfer': BedDouble, 'ipd-discharge': ArrowRightCircle,
+  appointment: CalendarDays, consultation: Stethoscope, prescription: Pill,
+  'lab-test': FlaskConical, therapy: Flower2, vitals: Activity, bill: Receipt,
+  'dental-procedure': Smile, 'physio-referral': Activity, 'physio-plan-started': Activity,
+  'physio-plan-completed': Activity, 'physio-session-note': NotebookPen,
+  'lab-request': FlaskConical, 'critical-lab': AlertTriangle, 'dental-followup': Smile, 'package-renewal': Activity,
+  'nursing-clearance': HeartPulse, 'billing-clearance': Receipt, 'discharge-clearance': ArrowRightCircle,
+}
+const JOURNEY_TONES = {
+  registration: 'slate', 'pain-recorded': 'gold', 'initial-assessment': 'green',
+  'opd-visit': 'slate', 'ipd-admission': 'sky', 'bed-transfer': 'gold', 'ipd-discharge': 'green',
+  appointment: 'slate', consultation: 'green', prescription: 'gold',
+  'lab-test': 'sky', therapy: 'green', vitals: 'slate', bill: 'gold',
+  'dental-procedure': 'sky', 'physio-referral': 'gold', 'physio-plan-started': 'sky',
+  'physio-plan-completed': 'green', 'physio-session-note': 'slate',
+  'lab-request': 'sky', 'critical-lab': 'gold', 'dental-followup': 'gold', 'package-renewal': 'gold',
+  'nursing-clearance': 'slate', 'billing-clearance': 'gold', 'discharge-clearance': 'green',
+}
 import { useToast } from '../components/ui/Toast'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
@@ -632,29 +658,10 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
   const f = patient.female
   const pn = patient.pain
 
-  // Build a chronological timeline
-  const timeline = useMemo(() => {
-    const ev = []
-    ev.push({ date: patient.registeredOn, icon: Users, title: 'Registration created', detail: patient.mrn, tone: 'slate' })
-    if (pn.present === 'Yes') ev.push({ date: patient.registeredOn, icon: Gauge, title: 'Pain score recorded', detail: `Score ${pn.score || '—'}/10 · ${pn.location || 'unspecified'}`, tone: 'gold' })
-    if (hasVal(h.existingConditions) || hasVal(h.currentMeds) || hasVal(h.familyHistory)) ev.push({ date: patient.registeredOn, icon: ClipboardList, title: 'Initial assessment recorded', detail: 'Medical history captured at registration', tone: 'green' })
-    eps.forEach((e) => {
-      if (e.type === 'OPD') ev.push({ date: e.date, icon: CalendarDays, title: `OPD visit · ${e.refNo}`, detail: e.reason, tone: 'slate' })
-      else {
-        ev.push({ date: e.admitDate, icon: BedDouble, title: `${e.convertedFrom ? 'Converted to IPD' : 'IPD admission'} · ${e.refNo}`, detail: `${e.ward} — ${e.diagnosis || e.reason}`, tone: 'sky' })
-        ;(e.transfers || []).forEach((t) => ev.push({ date: t.date, icon: BedDouble, title: 'Bed transfer', detail: `${t.from} → ${t.to} (${t.reason})`, tone: 'gold' }))
-        if (e.dischargeDate) ev.push({ date: e.dischargeDate, icon: ArrowRightCircle, title: `Discharged · ${e.refNo}`, detail: e.ward, tone: 'green' })
-      }
-    })
-    appts.forEach((a) => ev.push({ date: a.date, icon: CalendarDays, title: `Appointment — ${a.status}`, detail: `${a.reason} · ${doctorName(a.doctorId)}`, tone: 'slate' }))
-    cons.forEach((c) => ev.push({ date: c.date, icon: Stethoscope, title: 'Consultation completed', detail: c.diagnosis || c.notes, tone: 'green' }))
-    rxs.forEach((r) => ev.push({ date: r.createdOn, icon: Pill, title: `Prescription added — ${r.status}`, detail: r.items.map((i) => i.name).join(', '), tone: 'gold' }))
-    labs.forEach((l) => ev.push({ date: l.requestedOn, icon: FlaskConical, title: `Lab — ${l.testName} (${l.status})`, detail: l.result || 'Requested', tone: 'sky' }))
-    therapies.forEach((t) => ev.push({ date: t.date, icon: Flower2, title: `Therapy — ${t.type} (${t.status})`, detail: t.notes, tone: 'green' }))
-    vitals.forEach((v) => ev.push({ date: v.recordedAt, icon: Activity, title: 'Vitals recorded', detail: `BP ${v.bp} · Pulse ${v.pulse} · SpO₂ ${v.spo2}%`, tone: 'slate' }))
-    bills.forEach((b) => ev.push({ date: b.date, icon: Receipt, title: `Bill generated — ${b.invoiceNo} (${b.status})`, detail: `${b.billType} · ${inr(b.total)}`, tone: 'gold' }))
-    return ev.filter((e) => e.date).sort((a, b) => b.date.localeCompare(a.date))
-  }, [patient, eps, appts, cons, rxs, labs, therapies, vitals, bills, doctorName])
+  // Chronological timeline (§11 Phase 8a) — derived by journey.js from
+  // every department/collection touching this patient, not just the 9
+  // sources this component used to build inline.
+  const timeline = useMemo(() => buildJourney(state, patient), [state, patient])
 
   const TABS = [
     ['overview', 'Overview'],
@@ -951,12 +958,14 @@ function PatientDetail({ patient: raw, onClose, onConvert }) {
         <ol className="relative ml-2 border-l-2 border-sand">
           {timeline.map((ev, i) => {
             const TONES = { slate: 'bg-slate-100 text-slate-600', sky: 'bg-sky-50 text-sky-600', green: 'bg-brand-50 text-brand-700', gold: 'bg-gold-50 text-gold-700' }
+            const Icon = JOURNEY_ICONS[ev.type] || ClipboardList
+            const tone = JOURNEY_TONES[ev.type] || 'slate'
             return (
               <li key={i} className="mb-4 ml-5">
-                <span className={`absolute -left-[13px] flex h-6 w-6 items-center justify-center rounded-full ${TONES[ev.tone]}`}><ev.icon size={13} /></span>
+                <span className={`absolute -left-[13px] flex h-6 w-6 items-center justify-center rounded-full ${TONES[tone]}`}><Icon size={13} /></span>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-brand-900">{ev.title}</p>
-                  <span className="text-xs text-ink/40">{formatDate(ev.date)}</span>
+                  <p className="text-sm font-medium text-brand-900">{ev.label}</p>
+                  <span className="text-xs text-ink/40">{formatDate(ev.at)}</span>
                 </div>
                 {ev.detail && <p className="text-sm text-ink/55">{ev.detail}</p>}
               </li>
