@@ -105,6 +105,24 @@ export function TreatmentPlanPanel({ dept }) {
     toast(`Plan marked ${status}.`)
   }
 
+  // Outcome tracking (§10.9) — closing a plan captures closing pain score
+  // vs. the earliest progress note's pain score, goal achievement, and an
+  // optional functional score, instead of just flipping status silently.
+  const completeWithOutcome = (plan, outcome) => {
+    const initialNote = [...(state.progressNotes || [])]
+      .filter((n) => n.treatmentPlanId === plan.id)
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))[0]
+    repos.treatmentPlans.update(plan.id, {
+      status: 'completed', updatedAt: new Date().toISOString(),
+      initialPainScore: initialNote?.painScore ?? null,
+      closingPainScore: outcome.closingPainScore === '' ? null : Number(outcome.closingPainScore),
+      goalAchievement: outcome.goalAchievement,
+      functionalScore: outcome.functionalScore === '' ? null : Number(outcome.functionalScore),
+      outcomeSummary: outcome.outcomeSummary.trim(),
+    })
+    toast(`${plan.diagnosis} marked completed with outcome recorded.`)
+  }
+
   const scheduleSession = (plan, date, time) => {
     const apptId = uid('apt')
     add('appointments', {
@@ -147,7 +165,10 @@ export function TreatmentPlanPanel({ dept }) {
         )}
 
         {plans.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} canManage={canManage} onSetStatus={setStatus} onScheduleSession={scheduleSession} />
+          <PlanCard
+            key={plan.id} plan={plan} canManage={canManage}
+            onSetStatus={setStatus} onCompleteWithOutcome={completeWithOutcome} onScheduleSession={scheduleSession}
+          />
         ))}
 
         {plans.length > 0 && canManage && !creating && (
@@ -203,7 +224,9 @@ export function TreatmentPlanPanel({ dept }) {
   )
 }
 
-function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
+const blankOutcomeDraft = () => ({ closingPainScore: '', goalAchievement: 'met', functionalScore: '', outcomeSummary: '' })
+
+function PlanCard({ plan, canManage, onSetStatus, onCompleteWithOutcome, onScheduleSession }) {
   const { state, repos } = useHospital()
   const { user } = useAuth()
   const toast = useToast()
@@ -211,6 +234,8 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
   const [sessionDraft, setSessionDraft] = useState({ date: today(), time: '10:00' })
   const [noteFor, setNoteFor] = useState(null)
   const [noteDraft, setNoteDraft] = useState(blankNoteDraft())
+  const [capturingOutcome, setCapturingOutcome] = useState(false)
+  const [outcomeDraft, setOutcomeDraft] = useState(blankOutcomeDraft())
 
   const sessions = useMemo(
     () => (state.appointments || [])
@@ -252,6 +277,24 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
     setNoteFor(null)
   }
 
+  // Picking "completed" opens the outcome form instead of committing
+  // immediately; active/discontinued still apply straight away. The
+  // <Select> keeps showing plan.status, so cancelling just leaves it
+  // untouched — no extra state needed to "revert" it.
+  const handleStatusChange = (newStatus) => {
+    if (newStatus === 'completed' && plan.status !== 'completed') {
+      setOutcomeDraft(blankOutcomeDraft())
+      setCapturingOutcome(true)
+    } else {
+      onSetStatus(plan, newStatus)
+    }
+  }
+
+  const submitOutcome = () => {
+    onCompleteWithOutcome(plan, outcomeDraft)
+    setCapturingOutcome(false)
+  }
+
   return (
     <div className="rounded-lg border border-sand">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand bg-cream/40 px-3 py-2">
@@ -260,13 +303,42 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
           <p className="text-xs text-ink/50">{plan.goals}</p>
         </div>
         {canManage ? (
-          <Select value={plan.status} onChange={(e) => onSetStatus(plan, e.target.value)} className="w-auto py-1 text-xs">
+          <Select value={plan.status} onChange={(e) => handleStatusChange(e.target.value)} className="w-auto py-1 text-xs">
             {STATUS_OPTIONS.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
           </Select>
         ) : (
           <Badge status={plan.status} />
         )}
       </div>
+
+      {plan.status === 'completed' && (plan.closingPainScore != null || plan.goalAchievement) && (
+        <div className="border-b border-sand bg-brand-50/40 px-3 py-2 text-xs text-brand-800">
+          Outcome: pain {plan.initialPainScore ?? '—'} → {plan.closingPainScore ?? '—'}
+          {plan.goalAchievement && <> · Goals {plan.goalAchievement.replace('-', ' ')}</>}
+          {plan.functionalScore != null && <> · Functional score {plan.functionalScore}</>}
+          {plan.outcomeSummary && <> · {plan.outcomeSummary}</>}
+        </div>
+      )}
+
+      {capturingOutcome && (
+        <div className="space-y-2 border-b border-sand bg-cream/60 p-3">
+          <p className="text-xs font-medium text-brand-900">Recording outcome for this plan</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Input type="number" min="0" max="10" placeholder="Closing pain 0–10" value={outcomeDraft.closingPainScore} onChange={(e) => setOutcomeDraft({ ...outcomeDraft, closingPainScore: e.target.value })} />
+            <Select value={outcomeDraft.goalAchievement} onChange={(e) => setOutcomeDraft({ ...outcomeDraft, goalAchievement: e.target.value })}>
+              <option value="met">Goals met</option>
+              <option value="partial">Goals partially met</option>
+              <option value="not-met">Goals not met</option>
+            </Select>
+            <Input type="number" placeholder="Functional score (optional)" value={outcomeDraft.functionalScore} onChange={(e) => setOutcomeDraft({ ...outcomeDraft, functionalScore: e.target.value })} className="sm:col-span-2" />
+          </div>
+          <Textarea placeholder="Outcome summary…" value={outcomeDraft.outcomeSummary} onChange={(e) => setOutcomeDraft({ ...outcomeDraft, outcomeSummary: e.target.value })} />
+          <div className="flex gap-2">
+            <button className="btn-primary btn-sm" onClick={submitOutcome}>Complete Plan</button>
+            <button className="btn-outline btn-sm" onClick={() => setCapturingOutcome(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-xs text-ink/60">
         <span>{completedCount} of {plan.plannedSessions} sessions completed</span>

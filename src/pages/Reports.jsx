@@ -3,10 +3,10 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download, Smile } from 'lucide-react'
+import { BarChart3, Users, CalendarCheck, IndianRupee, Pill, FlaskConical, BedDouble, Flower2, Download, Smile, Activity, TrendingDown, UserX, PackageCheck } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
-import { PageHeader, StatCard, Field, Input } from '../components/ui/primitives'
-import { inr, formatDate } from '../lib/utils'
+import { PageHeader, StatCard, Field, Input, Badge } from '../components/ui/primitives'
+import { inr, formatDate, today } from '../lib/utils'
 import { computeBill } from '../lib/billing'
 import { exportCsv } from '../lib/csv'
 
@@ -66,6 +66,45 @@ export default function Reports() {
       ? Math.round((dentalFollowupDone / dentalFollowupTasks.length) * 100)
       : null
 
+    // Physiotherapy (§10.9/10.10) — outcome tracking + Reports metrics,
+    // all derived from Phase 6a-6d's collections, no new storage needed.
+    const physioReferrals = state.tasks.filter((t) => t.type === 'physio-referral' && inRange((t.createdAt || '').slice(0, 10)))
+    const referralsBySource = {}
+    physioReferrals.forEach((t) => { referralsBySource[t.sourceRole || 'unknown'] = (referralsBySource[t.sourceRole || 'unknown'] || 0) + 1 })
+
+    const physioSessionTasks = state.tasks.filter((t) => t.type === 'physio-session')
+    const completedSessions = physioSessionTasks.filter((t) => t.status === 'Completed' && inRange((t.completedAt || '').slice(0, 10)))
+    const sessionsByTherapist = {}
+    completedSessions.forEach((t) => { sessionsByTherapist[t.acceptedBy || 'Unassigned'] = (sessionsByTherapist[t.acceptedBy || 'Unassigned'] || 0) + 1 })
+    const sessionsPerTherapistData = Object.entries(sessionsByTherapist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+
+    // Current state, not date-filtered — same convention as Low Stock/Lab Pending above.
+    const packages = state.packages || []
+    const packagesLowBalance = packages.filter((p) => p.status === 'active' && (p.totalSessions - p.usedSessions) <= 2).length
+
+    const completedPlans = (state.treatmentPlans || []).filter((p) => p.status === 'completed' && inRange((p.updatedAt || '').slice(0, 10)))
+    const plansWithPainDelta = completedPlans.filter((p) => p.initialPainScore != null && p.closingPainScore != null)
+    const avgPainReduction = plansWithPainDelta.length
+      ? plansWithPainDelta.reduce((s, p) => s + (p.initialPainScore - p.closingPainScore), 0) / plansWithPainDelta.length
+      : null
+    const goalAchievementCounts = { met: 0, partial: 0, 'not-met': 0 }
+    completedPlans.forEach((p) => { if (p.goalAchievement) goalAchievementCounts[p.goalAchievement] = (goalAchievementCounts[p.goalAchievement] || 0) + 1 })
+
+    const physioBillableTotal = state.billableItems
+      .filter((b) => b.department === 'Physiotherapy' && inRange((b.createdAt || '').slice(0, 10)))
+      .reduce((s, b) => s + (b.amount || 0), 0)
+    const physioPackageRevenue = packages
+      .filter((p) => inRange((p.createdAt || '').slice(0, 10)))
+      .reduce((s, p) => s + (p.amount || 0), 0)
+    const physioRevenue = physioBillableTotal + physioPackageRevenue
+
+    // No-show is approximated (§10.10) — the appointment model has no
+    // dedicated no-show status, so "past its date, never completed or
+    // cancelled" is the closest honest proxy from existing data.
+    const pastSessions = state.appointments.filter((a) => a.reason === 'Session' && a.department === 'Physiotherapy' && a.date < today())
+    const noShowSessions = pastSessions.filter((a) => a.status === 'scheduled')
+    const noShowRate = pastSessions.length ? Math.round((noShowSessions.length / pastSessions.length) * 100) : null
+
     return {
       revenue, billed, revenueData, patientData,
       stockData: [{ name: 'Ayurveda', value: ayur }, { name: 'Modern', value: modern }],
@@ -77,6 +116,8 @@ export default function Reports() {
       occupancy: state.beds.length ? Math.round((state.beds.filter((b) => b.status === 'occupied').length / state.beds.length) * 100) : 0,
       dentalItems, dentalCompleted, dentalRevenue, dentalProcedureData,
       dentalFollowupTasks, dentalFollowupDone, dentalFollowupRate,
+      physioReferrals, referralsBySource, sessionsPerTherapistData, packages, packagesLowBalance,
+      completedPlans, avgPainReduction, goalAchievementCounts, physioRevenue, noShowRate, pastSessions,
     }
   }, [state, from, to])
 
@@ -124,9 +165,16 @@ export default function Reports() {
     { label: 'Amount', value: 'estAmount' },
   ], data.dentalCompleted)
 
+  const csvPhysio = () => exportCsv('physio_outcomes', [
+    { label: 'Patient', value: (p) => patientName(p.patientId) }, { label: 'MRN', value: 'mrn' },
+    { label: 'Diagnosis', value: 'diagnosis' }, { label: 'Initial Pain', value: 'initialPainScore' },
+    { label: 'Closing Pain', value: 'closingPainScore' }, { label: 'Goal Achievement', value: 'goalAchievement' },
+    { label: 'Functional Score', value: 'functionalScore' }, { label: 'Completed', value: (p) => (p.updatedAt || '').slice(0, 10) },
+  ], data.completedPlans)
+
   const exports = [
     ['Patients', csvPatients], ['Billing', csvBilling], ['Appointments', csvAppointments],
-    ['IPD Records', csvIpd], ['Panchakarma', csvTherapy], ['Dental Procedures', csvDental],
+    ['IPD Records', csvIpd], ['Panchakarma', csvTherapy], ['Dental Procedures', csvDental], ['Physio Outcomes', csvPhysio],
   ]
 
   return (
@@ -249,6 +297,103 @@ export default function Reports() {
             </table>
           )}
         </div>
+      </div>
+
+      {/* Physiotherapy (§10.10) */}
+      <div className="mt-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Activity size={18} className="text-gold-600" />
+          <h2 className="font-display text-lg font-semibold text-brand-900">Physiotherapy</h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard
+            label="Avg Pain Reduction"
+            value={data.avgPainReduction == null ? '—' : data.avgPainReduction.toFixed(1)}
+            icon={TrendingDown} tone="brand"
+            sub={data.completedPlans.length ? `Across ${data.completedPlans.length} completed plan(s)` : 'No completed plans yet'}
+          />
+          <StatCard label="Physio Revenue" value={inr(data.physioRevenue)} icon={IndianRupee} sub="Sessions + packages billed" />
+          <StatCard
+            label="No-Show Rate"
+            value={data.noShowRate == null ? '—' : `${data.noShowRate}%`}
+            icon={UserX} tone="rose"
+            sub={data.pastSessions.length ? `${data.pastSessions.length} past session(s)` : 'No past sessions yet'}
+          />
+          <StatCard label="Packages Near Renewal" value={data.packagesLowBalance} icon={PackageCheck} tone="gold" sub={`${data.packages.length} package(s) total`} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="card overflow-hidden">
+            <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Sessions per Therapist</h3></div>
+            {data.sessionsPerTherapistData.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink/40">No completed sessions in this period.</p>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-cream/60"><tr><th className="th">Therapist</th><th className="th text-right">Sessions Completed</th></tr></thead>
+                <tbody className="divide-y divide-sand">
+                  {data.sessionsPerTherapistData.map((row) => (
+                    <tr key={row.name} className="hover:bg-cream/40">
+                      <td className="td font-medium text-brand-900">{row.name}</td>
+                      <td className="td text-right">{row.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Referrals by Source Role</h3></div>
+            {data.physioReferrals.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink/40">No referrals in this period.</p>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-cream/60"><tr><th className="th">Source Role</th><th className="th text-right">Referrals</th></tr></thead>
+                <tbody className="divide-y divide-sand">
+                  {Object.entries(data.referralsBySource).sort((a, b) => b[1] - a[1]).map(([role, count]) => (
+                    <tr key={role} className="hover:bg-cream/40">
+                      <td className="td font-medium capitalize text-brand-900">{role}</td>
+                      <td className="td text-right">{count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 card overflow-hidden">
+          <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Package Utilization</h3></div>
+          {data.packages.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink/40">No packages started yet.</p>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-cream/60"><tr>
+                <th className="th">Patient</th><th className="th">Package</th><th className="th text-right">Used</th><th className="th">Status</th>
+              </tr></thead>
+              <tbody className="divide-y divide-sand">
+                {data.packages.map((p) => (
+                  <tr key={p.id} className="hover:bg-cream/40">
+                    <td className="td">{patientName(p.patientId)}</td>
+                    <td className="td font-medium text-brand-900">{p.name}</td>
+                    <td className="td text-right">{p.usedSessions} of {p.totalSessions}</td>
+                    <td className="td"><Badge status={p.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {data.completedPlans.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-3 text-sm text-ink/60">
+            <span>Goal achievement — </span>
+            <Badge tone="green">Met: {data.goalAchievementCounts.met}</Badge>
+            <Badge tone="gold">Partial: {data.goalAchievementCounts.partial}</Badge>
+            <Badge tone="rose">Not met: {data.goalAchievementCounts['not-met']}</Badge>
+          </div>
+        )}
       </div>
     </>
   )
