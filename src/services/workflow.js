@@ -61,6 +61,7 @@ export const TASK_ROUTES = {
   'dental-followup': { assignedRole: 'dentist', assignedDepartment: 'DENT', label: 'Dental follow-up needed' },
   'physio-referral': { assignedRole: 'physiotherapist', assignedDepartment: 'PHYS', label: 'Physiotherapy referral' },
   'physio-session': { assignedRole: 'physiotherapist', assignedDepartment: 'PHYS', label: 'Physiotherapy session' },
+  'package-renewal': { assignedRole: 'reception', assignedDepartment: 'FRONT', label: 'Package renewal needed' },
 }
 
 export function buildTask({

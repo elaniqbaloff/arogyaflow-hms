@@ -60,6 +60,7 @@ export function buildRepositories(prim) {
     attachments: crud('attachments', prim),
     treatmentPlans: crud('treatmentPlans', prim),
     progressNotes: crud('progressNotes', prim),
+    packages: crud('packages', prim),
     tasks: crud('tasks', prim),
     approvals: crud('approvals', prim),
     audit: crud('audit', prim),
@@ -74,6 +75,49 @@ export function buildRepositories(prim) {
       user, action, module: 'tasks', recordId: task.id, mrn: task.mrn,
       oldValue: oldValue ?? null, newValue: newValue ?? null, remarks: remarks || '',
     }))
+  }
+
+  // Package/session billing (§10.8), triggered from the generic
+  // tasks.complete() verb below — not a dedicated physio verb — so the
+  // billing effect fires identically no matter which UI completes the
+  // task (Tasks.jsx, any Department Hub worklist, etc). Reads
+  // plan/package once via byId() before its one dispatch, same
+  // single-update discipline as completeItem's deriveItem (§5b).
+  const applyPhysioSessionCompletion = (task, user) => {
+    const appointment = (prim.getState().appointments || []).find((a) => a.id === task.relatedId)
+    const plan = appointment?.treatmentPlanId ? base.treatmentPlans.byId(appointment.treatmentPlanId) : null
+    if (!plan) return
+    const now = new Date().toISOString()
+
+    const pkg = plan.packageId ? base.packages.byId(plan.packageId) : null
+    if (pkg) {
+      const usedSessions = pkg.usedSessions + 1
+      const remaining = pkg.totalSessions - usedSessions
+      const status = remaining <= 0 ? 'exhausted' : pkg.status
+      prim.update('packages', pkg.id, { usedSessions, status, updatedAt: now })
+      prim.add('audit', buildAudit({
+        user, action: 'package.session.used', module: 'packages', recordId: pkg.id, mrn: plan.mrn,
+        oldValue: pkg.usedSessions, newValue: usedSessions,
+        remarks: `${pkg.name} — ${Math.max(remaining, 0)} of ${pkg.totalSessions} sessions remaining`,
+      }))
+      if (remaining > 0 && remaining <= 2) {
+        prim.add('tasks', buildTask({
+          type: 'package-renewal', mrn: plan.mrn, sourceRole: 'system', createdBy: 'System',
+          relatedId: pkg.id, notes: `${pkg.name} — only ${remaining} session(s) left for ${plan.diagnosis}`,
+        }))
+      }
+    } else {
+      // Pay-per-session fallback (§10.8) — same pending-billable-item
+      // pattern completeItem uses for dental, priced off the standalone
+      // per-session pricing row rather than a package lump sum.
+      const sessionPrice = (prim.getState().pricing || []).find((p) => p.code === 'PHYS-SESSION')
+      prim.add('billableItems', {
+        id: uid('bi'), mrn: plan.mrn, patientId: plan.patientId, episodeId: null,
+        department: 'Physiotherapy', desc: `Physiotherapy session — ${plan.diagnosis}`,
+        priceId: sessionPrice?.id || null, amount: sessionPrice?.amount || 0,
+        status: 'pending', createdAt: now, source: 'physio-session',
+      })
+    }
   }
 
   base.tasks = {
@@ -121,6 +165,7 @@ export function buildRepositories(prim) {
         startedAt: task.startedAt || now,
       })
       taskAudit(user, 'task.completed', task, task.status, 'Completed')
+      if (task.type === 'physio-session') applyPhysioSessionCompletion(task, user)
       return { ok: true }
     },
 

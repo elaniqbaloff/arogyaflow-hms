@@ -6,7 +6,7 @@ import { can } from '../../config/roles'
 import { useToast } from '../ui/Toast'
 import { Badge, Select, Input, Textarea, EmptyState } from '../ui/primitives'
 import { TASK_STATUS_TONES } from '../../config/statusTones'
-import { formatDate, today, uid } from '../../lib/utils'
+import { formatDate, today, uid, inr } from '../../lib/utils'
 
 const blankNoteDraft = () => ({ painScore: '', keyRomLabel: '', keyRomDegrees: '', notesDone: '', notesResponse: '', nextSessionFocus: '' })
 
@@ -52,24 +52,48 @@ export function TreatmentPlanPanel({ dept }) {
     )
   }, [state.tasks, state.treatmentPlans, activePatient])
 
-  const [draft, setDraft] = useState({ diagnosis: '', goals: '', plannedSessions: 10, frequency: '', referralId: null })
+  const packagePricing = useMemo(
+    () => state.pricing.filter((p) => p.code?.startsWith('PHYS-PKG')),
+    [state.pricing]
+  )
+  const [draft, setDraft] = useState({
+    diagnosis: '', goals: '', plannedSessions: 10, frequency: '', referralId: null,
+    billing: 'session', packagePriceId: packagePricing[0]?.id || '',
+  })
 
   const startCreating = () => {
     setDraft({
-      diagnosis: openReferral?.notes || '', goals: '', plannedSessions: 10,
-      frequency: '', referralId: openReferral?.id || null,
+      diagnosis: openReferral?.notes || '', goals: '', plannedSessions: 10, frequency: '',
+      referralId: openReferral?.id || null, billing: 'session', packagePriceId: packagePricing[0]?.id || '',
     })
     setCreating(true)
   }
 
+  // Package/session billing (§10.8) — choosing "Package" here creates the
+  // package record first (so the plan can link packageId on save);
+  // "Pay-per-session" leaves packageId null, and completing each session's
+  // task creates a pending billableItem instead (repositories.js).
   const savePlan = () => {
     if (!draft.diagnosis.trim()) { toast('Add a diagnosis.', 'error'); return }
     const now = new Date().toISOString()
+    let packageId = null
+    if (draft.billing === 'package') {
+      const price = packagePricing.find((p) => p.id === draft.packagePriceId)
+      if (!price) { toast('Choose a package.', 'error'); return }
+      const sessionsMatch = price.name.match(/^(\d+)-Session/)
+      packageId = repos.packages.create({
+        patientId, mrn: activePatient?.mrn || null, department: dept.name,
+        pricingId: price.id, name: price.name,
+        totalSessions: sessionsMatch ? Number(sessionsMatch[1]) : Number(draft.plannedSessions) || 0,
+        usedSessions: 0, amount: price.amount, status: 'active',
+        createdBy: user.name, createdAt: now, updatedAt: now,
+      })
+    }
     repos.treatmentPlans.create({
       patientId, mrn: activePatient?.mrn || null, department: dept.code,
       referralId: draft.referralId, diagnosis: draft.diagnosis.trim(), goals: draft.goals.trim(),
       plannedSessions: Number(draft.plannedSessions) || 0, frequency: draft.frequency.trim(),
-      packageId: null, status: 'active', outcomeSummary: '',
+      packageId, status: 'active', outcomeSummary: '',
       createdBy: user.name, createdAt: now, updatedAt: now,
     })
     toast(`Treatment plan started for ${activePatient?.name}.`)
@@ -152,6 +176,21 @@ export function TreatmentPlanPanel({ dept }) {
                 <span className="label">Frequency</span>
                 <Input value={draft.frequency} onChange={(e) => setDraft({ ...draft, frequency: e.target.value })} placeholder="e.g. 3x/week for 4 weeks" />
               </div>
+              <div>
+                <span className="label">Billing</span>
+                <Select value={draft.billing} onChange={(e) => setDraft({ ...draft, billing: e.target.value })}>
+                  <option value="session">Pay per session</option>
+                  <option value="package">Session package</option>
+                </Select>
+              </div>
+              {draft.billing === 'package' && (
+                <div>
+                  <span className="label">Package</span>
+                  <Select value={draft.packagePriceId} onChange={(e) => setDraft({ ...draft, packagePriceId: e.target.value })}>
+                    {packagePricing.map((p) => <option key={p.id} value={p.id}>{p.name} — {inr(p.amount)}</option>)}
+                  </Select>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <button className="btn-primary btn-sm" onClick={savePlan}>Start Plan</button>
@@ -185,6 +224,7 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
     [state.appointments, state.tasks, state.progressNotes, plan.id]
   )
   const completedCount = sessions.filter((s) => s.task?.status === 'Completed').length
+  const pkg = plan.packageId ? (state.packages || []).find((p) => p.id === plan.packageId) : null
 
   const submitSchedule = () => {
     if (!sessionDraft.date || !sessionDraft.time) { toast('Pick a date and time.', 'error'); return }
@@ -228,10 +268,18 @@ function PlanCard({ plan, canManage, onSetStatus, onScheduleSession }) {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-x-6 gap-y-1 px-3 py-2 text-xs text-ink/60">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-xs text-ink/60">
         <span>{completedCount} of {plan.plannedSessions} sessions completed</span>
         {plan.frequency && <span>{plan.frequency}</span>}
         <span>Started {formatDate(plan.createdAt)} by {plan.createdBy}</span>
+        {pkg ? (
+          <span className="flex items-center gap-1.5">
+            <Badge tone={pkg.status === 'exhausted' ? 'rose' : 'green'}>{pkg.name}</Badge>
+            {Math.min(pkg.usedSessions, pkg.totalSessions)} of {pkg.totalSessions} sessions used
+          </span>
+        ) : (
+          <Badge tone="slate">Pay per session</Badge>
+        )}
       </div>
 
       {sessions.length > 0 && (

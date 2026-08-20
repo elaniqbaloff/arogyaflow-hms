@@ -29,6 +29,12 @@ export const pricing = [
   { id: 'prc_dent_bridge', code: 'DENT-BRIDGE', name: 'Bridge (per unit)', department: 'Dental', amount: 5500, taxable: true },
   { id: 'prc_dent_implant', code: 'DENT-IMPLANT', name: 'Dental implant', department: 'Dental', amount: 25000, taxable: true },
   { id: 'prc_dent_whitening', code: 'DENT-WHITEN', name: 'Teeth whitening', department: 'Dental', amount: 3500, taxable: true },
+  // Physiotherapy (§10.8) — a standalone per-session rate for the
+  // pay-per-session fallback, plus two package presets. Package `amount`
+  // is a discounted lump sum vs. paying per-session individually.
+  { id: 'prc_phys_session', code: 'PHYS-SESSION', name: 'Physiotherapy session', department: 'Physiotherapy', amount: 800, taxable: true },
+  { id: 'prc_phys_pkg5', code: 'PHYS-PKG5', name: '5-Session Rehab Package', department: 'Physiotherapy', amount: 3750, taxable: true },
+  { id: 'prc_phys_pkg10', code: 'PHYS-PKG10', name: '10-Session Rehab Package', department: 'Physiotherapy', amount: 7000, taxable: true },
 ]
 
 // Pending billable items — services rendered, not yet on a final invoice.
@@ -117,6 +123,11 @@ export const progressNotes = [
     writtenBy: 'Dr. Kavya Nair', createdAt: daysFromNow(-2),
   },
 ]
+
+// Package/session billing engine (§10.8) — shared shape meant for
+// Panchakarma courses and Yoga memberships too, not physio-specific;
+// only the physio UI (TreatmentPlanPanel) creates/consumes these so far.
+export const packages = []
 
 export const tasks = [
   { id: 'tsk_1', type: 'lab-request', label: 'Lab test requested', priority: 'Normal', mrn: 'MRN-0007', sourceRole: 'doctor', assignedRole: 'lab', assignedDepartment: 'DIAG', assignedUserId: null, status: 'Pending', createdBy: 'Dr. Anand Varma', createdAt: daysFromNow(-1), dueAt: null, relatedId: 'lab_3', notes: 'Vitamin D for IPD Panchakarma patient.', acceptedBy: null, acceptedAt: null, startedAt: null, completedAt: null, blockedReason: null },
