@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FlaskConical, Plus, Pencil, Trash2, FileCheck2, TestTube2, Check, X, Layers } from 'lucide-react'
+import { FlaskConical, Plus, Pencil, Trash2, FileCheck2, TestTube2, Check, X, Layers, AlertTriangle } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
@@ -84,9 +84,11 @@ export default function Lab() {
   }
 
   const saveResult = () => {
-    const outcome = repos.labTests.resultEntry(result.id, user, result.result)
+    const outcome = repos.labTests.resultEntry(result.id, user, result.result, { critical: result.critical })
     if (!outcome.ok) { toast(`Couldn't save result (${outcome.reason}).`, 'error'); return }
-    toast(`Result posted for "${result.testName}" — linked to patient record.`)
+    toast(result.critical
+      ? `Result posted for "${result.testName}" — flagged critical, ordering doctor notified.`
+      : `Result posted for "${result.testName}" — linked to patient record.`)
     setResult(null)
   }
 
@@ -147,21 +149,22 @@ export default function Lab() {
               </thead>
               <tbody className="divide-y divide-sand">
                 {list.map((t) => (
-                  <tr key={t.id} className="hover:bg-cream/40">
+                  <tr key={t.id} className={t.critical ? 'bg-rose-50/60 hover:bg-rose-50' : 'hover:bg-cream/40'}>
                     <td className="td font-medium text-brand-900">
+                      {t.critical && <AlertTriangle size={14} className="mr-1 inline-block align-middle text-rose-600" />}
                       {t.testName}
                       {t.panelLabel && <span className="ml-2 inline-block align-middle"><Badge tone="slate">{t.panelLabel}</Badge></span>}
                     </td>
                     <td className="td">{patientName(t.patientId)}</td>
                     <td className="td text-ink/50">{formatDate(t.requestedOn)}</td>
-                    <td className="td max-w-[220px] truncate text-ink/60">{t.result || '—'}</td>
+                    <td className="td max-w-[220px] truncate text-ink/60" title={t.critical ? 'Critical result' : undefined}>{t.result || '—'}</td>
                     <td className="td"><Badge status={t.status} /></td>
                     <td className="td">
                       <div className="flex items-center justify-end gap-1">
                         {canManage && (LAB_ACTIONS[t.status] || []).map((a) => (
                           <button
                             key={a.label} className="btn-ghost btn-sm text-brand-700" title={a.label}
-                            onClick={() => (a.opensResultModal ? setResult({ ...t }) : doVerb(a.verb, t))}
+                            onClick={() => (a.opensResultModal ? setResult({ ...t, critical: false }) : doVerb(a.verb, t))}
                           >
                             <a.icon size={15} />
                           </button>
@@ -264,9 +267,15 @@ export default function Lab() {
         </>}
       >
         {result && (
-          <Field label="Result / findings">
-            <Textarea value={result.result} onChange={(e) => setResult({ ...result, result: e.target.value })} placeholder="e.g. HbA1c 6.4% — within target range." />
-          </Field>
+          <div className="space-y-3">
+            <Field label="Result / findings">
+              <Textarea value={result.result} onChange={(e) => setResult({ ...result, result: e.target.value })} placeholder="e.g. HbA1c 6.4% — within target range." />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-rose-700">
+              <input type="checkbox" checked={!!result.critical} onChange={(e) => setResult({ ...result, critical: e.target.checked })} />
+              Mark as critical — notifies the ordering doctor immediately
+            </label>
+          </div>
         )}
       </Modal>
 

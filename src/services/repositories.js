@@ -392,8 +392,39 @@ export function buildRepositories(prim) {
   base.labTests = {
     ...base.labTests,
     collect: (id, user) => transitionLabTest(id, 'collected', user, { collectedAt: new Date().toISOString() }),
-    resultEntry: (id, user, resultText) =>
-      transitionLabTest(id, 'resulted', user, { result: resultText, resultedAt: new Date().toISOString() }),
+    // Critical flag (§11 Phase 7c) is captured manually at result-entry time
+    // — there's no reference-range data model to auto-detect it against.
+    // When set, raises a critical-lab task addressed to the SPECIFIC
+    // ordering doctor (assignedUserId), not just their department, so it
+    // reaches them regardless of who else works that department. Every
+    // cross-collection lookup happens BEFORE transitionLabTest's dispatch —
+    // reading prim.getState() again afterward would risk the stale-ref trap
+    // documented under Phase 5b (the whole state ref goes stale for one
+    // render cycle after any dispatch, not just the collection just written).
+    resultEntry: (id, user, resultText, { critical = false } = {}) => {
+      const test = base.labTests.byId(id)
+      if (!test) return { ok: false, reason: 'not-found' }
+      const patient = (prim.getState().patients || []).find((p) => p.id === test.patientId)
+      const orderingDoctor = (prim.getState().users || []).find((u) => u.id === test.doctorId)
+      const doctorDept = orderingDoctor
+        ? (prim.getState().departments || []).find((d) => d.name === orderingDoctor.department)
+        : null
+
+      const result = transitionLabTest(id, 'resulted', user, {
+        result: resultText, resultedAt: new Date().toISOString(), critical,
+      })
+      if (!result.ok) return result
+
+      if (critical) {
+        prim.add('tasks', buildTask({
+          type: 'critical-lab', priority: 'Critical', mrn: patient?.mrn || null,
+          sourceRole: user?.role, createdBy: user?.name || 'System',
+          assignedUserId: test.doctorId, assignedDepartment: doctorDept?.code || null,
+          relatedId: id, notes: `${test.testName} — CRITICAL: ${resultText} (${patient?.name || 'patient'})`,
+        }))
+      }
+      return result
+    },
     acknowledge: (id, user) => transitionLabTest(id, 'acknowledged', user, { acknowledgedAt: new Date().toISOString() }),
     cancel: (id, user, reason) => transitionLabTest(id, 'cancelled', user, { reason }),
 
