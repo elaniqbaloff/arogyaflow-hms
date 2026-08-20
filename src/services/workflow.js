@@ -59,6 +59,7 @@ export const TASK_ROUTES = {
   'bed-cleaning': { assignedRole: 'reception', assignedDepartment: 'FRONT', label: 'Bed marked for cleaning' },
   'nursing-clearance': { assignedRole: 'nurse', assignedDepartment: 'IPD', label: 'Nursing discharge clearance' },
   'dental-followup': { assignedRole: 'dentist', assignedDepartment: 'DENT', label: 'Dental follow-up needed' },
+  'physio-referral': { assignedRole: 'physiotherapist', assignedDepartment: 'PHYS', label: 'Physiotherapy referral' },
 }
 
 export function buildTask({

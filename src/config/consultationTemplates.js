@@ -77,14 +77,49 @@ export const MANDATORY_DENTAL_FIELDS = [
   'allergyConfirmed',
 ]
 
+// Additional fields shown only for the Physiotherapy department (§10.2),
+// SOAP-shaped. `chiefComplaint` (Subjective: complaint) and `treatment`
+// (Plan) are reused from COMMON_FIELDS rather than duplicated — same
+// reuse pattern DENTAL_FIELDS uses for chiefComplaint.
+export const PHYSIO_FIELDS = [
+  // Subjective
+  'physioHistory',
+  'painScore',
+  'functionalLimitations',
+  // Objective
+  'romEntries',
+  'strengthGrade',
+  'gaitPostureNotes',
+  'specialTests',
+  // Assessment
+  'clinicalImpression',
+  'goalsShort',
+  'goalsLong',
+  // Plan
+  'sessionsRecommended',
+  'sessionFrequency',
+  'precautions',
+]
+
+// Mirrors dental's pattern: bespoke mandatory set, not
+// MANDATORY_COMMON_FIELDS + extras. Blueprint §10.2: "Mandatory:
+// complaint, painScore, impression, plan" — complaint/plan map onto the
+// reused chiefComplaint/treatment fields.
+export const MANDATORY_PHYSIO_FIELDS = [
+  'chiefComplaint',
+  'painScore',
+  'clinicalImpression',
+  'treatment',
+]
+
 // Department types treated as "Ayurveda-first" for template purposes.
 // (Legacy fallback — see templateKeyFor below.)
 export const AYURVEDA_DEPARTMENT_TYPES = ['ayurveda']
 
 // Keyed template registry. A department picks its template via
-// `consultationTemplate` ('ayurveda' | 'dental' | 'common' for now); more
-// keys can be added here as new department categories get their own field
-// sets.
+// `consultationTemplate` ('ayurveda' | 'dental' | 'physio-assessment' |
+// 'common' for now); more keys can be added here as new department
+// categories get their own field sets.
 export const TEMPLATES = {
   ayurveda: {
     fields: [...COMMON_FIELDS, ...AYURVEDA_FIELDS],
@@ -93,6 +128,10 @@ export const TEMPLATES = {
   dental: {
     fields: [...COMMON_FIELDS, ...DENTAL_FIELDS],
     mandatory: [...MANDATORY_DENTAL_FIELDS],
+  },
+  'physio-assessment': {
+    fields: [...COMMON_FIELDS, ...PHYSIO_FIELDS],
+    mandatory: [...MANDATORY_PHYSIO_FIELDS],
   },
   common: {
     fields: [...COMMON_FIELDS],
@@ -125,6 +164,14 @@ export function isAyurvedaDepartment(department) {
  */
 export function isDentalDepartment(department) {
   return templateKeyFor(department) === 'dental'
+}
+
+/**
+ * Returns true if the given department object should use the
+ * Physiotherapy (SOAP) consultation template.
+ */
+export function isPhysioDepartment(department) {
+  return templateKeyFor(department) === 'physio-assessment'
 }
 
 /**

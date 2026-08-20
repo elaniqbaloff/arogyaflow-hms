@@ -9,15 +9,22 @@ import {
 } from '../components/ui/primitives'
 import { SmartField } from '../components/ui/SmartField'
 import { ToothPicker } from '../components/ui/ToothPicker'
+import { RomEntryTable } from '../components/ui/RomEntryTable'
 import { formatDate, today, uid, flagAbnormalVitals } from '../lib/utils'
 import { AUDIT_SEVERITY } from '../services/workflow'
 import {
-  isAyurvedaDepartment, isDentalDepartment, getMandatoryFields,
+  isAyurvedaDepartment, isDentalDepartment, isPhysioDepartment, getMandatoryFields,
 } from '../config/consultationTemplates'
 import { scopeFilter } from '../services/accessPolicy'
 
+// Referral-to-department → the task type it should raise (§10.1). Keyed by
+// department NAME (what `referral.toDepartment` stores), so adding
+// automation for another department later is one more entry, not a
+// separate code path.
+const REFERRAL_TASK_ROUTES = { Physiotherapy: 'physio-referral' }
+
 export default function Consultations() {
-  const { state, add, update, logAudit } = useHospital()
+  const { state, add, update, logAudit, createTask } = useHospital()
   const { patientName } = useLookups()
   const { user } = useAuth()
   const toast = useToast()
@@ -60,6 +67,10 @@ export default function Consultations() {
     pathyaApathya: { pathya: '', apathya: '' },
     dentalComplaintTooth: [], oralExamFindings: '', dentalDiagnosis: '', procedurePerformed: '',
     anesthesiaUsed: { used: false, agent: '' }, postOpInstructions: '', nextVisitPlan: '',
+    physioHistory: '', painScore: '', functionalLimitations: '',
+    romEntries: [], strengthGrade: '', gaitPostureNotes: '', specialTests: '',
+    clinicalImpression: '', goalsShort: '', goalsLong: '',
+    sessionsRecommended: '', sessionFrequency: '', precautions: '',
   }
 
   const departmentForPatient = (patientId) => {
@@ -121,6 +132,22 @@ export default function Consultations() {
       })
       toast('Consultation updated.')
     }
+
+    // Choosing a department with a wired referral route raises a task for
+    // it — once. §10.1: "choosing 'Refer to Physiotherapy' on a
+    // consultation creates a physio-referral task."
+    const taskType = d.referral?.toDepartment && REFERRAL_TASK_ROUTES[d.referral.toDepartment]
+    if (taskType && !d.referral.taskCreated) {
+      const patient = state.patients.find((p) => p.id === d.patientId)
+      createTask({
+        type: taskType, mrn: patient?.mrn, sourceRole: user.role, createdBy: user.name,
+        relatedId: d.id, priority: d.referral.urgency === 'urgent' ? 'High' : 'Normal',
+        notes: d.referral.reason || '',
+      })
+      update('consultations', d.id, { referral: { ...d.referral, taskCreated: true } })
+      toast(`Referred to ${d.referral.toDepartment} — task created.`)
+    }
+
     setForm(null)
   }
 
@@ -199,6 +226,12 @@ export default function Consultations() {
                       </p>
                     )}
                     {c.procedurePerformed && <p className="mt-0.5 text-sm text-ink/60"><span className="font-medium text-ink/50">Procedure:</span> {c.procedurePerformed}</p>}
+                    {c.clinicalImpression && (
+                      <p className="mt-0.5 text-sm text-ink/70">
+                        <span className="font-medium text-ink/50">Impression:</span> {c.clinicalImpression}
+                        {c.painScore !== '' && c.painScore != null && <> · <span className="text-ink/50">Pain:</span> {c.painScore}/10</>}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button className="btn-ghost btn-sm" onClick={() => setRxFor(c)} title="Add prescription"><Pill size={15} /></button>
@@ -254,6 +287,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
   const department = departmentForPatient(d.patientId)
   const ayurveda = isAyurvedaDepartment(department)
   const dental = isDentalDepartment(department)
+  const physio = isPhysioDepartment(department)
   // Same scope a consultation record for this patient would be visible
   // under, applied to the picker so a doctor can't start a note for a
   // patient they wouldn't be allowed to see afterward.
@@ -485,6 +519,67 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
         </div>
       )}
 
+      {physio && (
+        <div className="space-y-4 rounded-lg border border-gold-200 bg-gold-50/40 p-3">
+          <p className="text-sm font-semibold text-gold-800">Physiotherapy Assessment (SOAP)</p>
+
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Subjective</p>
+          <Field label="History of present condition">
+            <SmartField as={Textarea} fieldKey="physioHistory" departmentCode={department?.code} recordId={d.id} value={d.physioHistory} onChange={(e) => setField('physioHistory', e.target.value)} placeholder="Onset, mechanism, prior treatment…" />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Pain score (NPRS 0–10)" required>
+              <Input type="number" min="0" max="10" value={d.painScore} onChange={(e) => setField('painScore', e.target.value)} placeholder="0–10" />
+            </Field>
+            <Field label="Functional limitations">
+              <SmartField fieldKey="functionalLimitations" departmentCode={department?.code} recordId={d.id} value={d.functionalLimitations} onChange={(e) => setField('functionalLimitations', e.target.value)} placeholder="e.g. Unable to climb stairs" />
+            </Field>
+          </div>
+
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink/40">Objective</p>
+          <Field label="Range of motion">
+            <RomEntryTable value={d.romEntries || []} onChange={(next) => setField('romEntries', next)} />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Strength grade (MMT 0–5)">
+              <Input value={d.strengthGrade} onChange={(e) => setField('strengthGrade', e.target.value)} placeholder="e.g. 4/5 quadriceps" />
+            </Field>
+            <Field label="Special tests">
+              <SmartField fieldKey="specialTests" departmentCode={department?.code} recordId={d.id} value={d.specialTests} onChange={(e) => setField('specialTests', e.target.value)} placeholder="e.g. SLR positive at 40°" />
+            </Field>
+          </div>
+          <Field label="Gait / posture notes">
+            <SmartField as={Textarea} fieldKey="gaitPostureNotes" departmentCode={department?.code} recordId={d.id} value={d.gaitPostureNotes} onChange={(e) => setField('gaitPostureNotes', e.target.value)} placeholder="Observed gait pattern, postural deviations…" />
+          </Field>
+
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink/40">Assessment</p>
+          <Field label="Clinical impression" required>
+            <SmartField as={Textarea} fieldKey="clinicalImpression" departmentCode={department?.code} recordId={d.id} value={d.clinicalImpression} onChange={(e) => setField('clinicalImpression', e.target.value)} placeholder="Clinical reasoning / impression…" />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Short-term goals">
+              <SmartField fieldKey="goalsShort" departmentCode={department?.code} recordId={d.id} value={d.goalsShort} onChange={(e) => setField('goalsShort', e.target.value)} placeholder="e.g. Pain-free walking in 2 weeks" />
+            </Field>
+            <Field label="Long-term goals">
+              <SmartField fieldKey="goalsLong" departmentCode={department?.code} recordId={d.id} value={d.goalsLong} onChange={(e) => setField('goalsLong', e.target.value)} placeholder="e.g. Return to full activity" />
+            </Field>
+          </div>
+
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink/40">Plan</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Sessions recommended">
+              <Input type="number" min="1" value={d.sessionsRecommended} onChange={(e) => setField('sessionsRecommended', e.target.value)} placeholder="e.g. 10" />
+            </Field>
+            <Field label="Frequency">
+              <Input value={d.sessionFrequency} onChange={(e) => setField('sessionFrequency', e.target.value)} placeholder="e.g. 3x/week for 4 weeks" />
+            </Field>
+          </div>
+          <Field label="Precautions">
+            <SmartField as={Textarea} fieldKey="precautions" departmentCode={department?.code} recordId={d.id} value={d.precautions} onChange={(e) => setField('precautions', e.target.value)} placeholder="Movements/loads to avoid…" />
+          </Field>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Follow-up / review date">
           <Input type="date" value={d.followUpDate || ''} onChange={(e) => setField('followUpDate', e.target.value)} />
@@ -499,7 +594,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
 
       <div className="rounded-lg border border-sand p-3">
         <p className="text-sm font-medium text-brand-900">Refer / order (optional)</p>
-        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
           <Select
             value={d.referral?.toDepartment || ''}
             onChange={(e) => setForm({ ...form, data: { ...d, referral: { ...(d.referral || {}), toDepartment: e.target.value || null } } })}
@@ -516,14 +611,26 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
             <option value="nurse">Nurse</option>
             <option value="lab">Lab</option>
             <option value="pharmacy">Pharmacy</option>
+            <option value="physiotherapist">Physiotherapist</option>
           </Select>
           <Input
             placeholder="Reason"
             value={d.referral?.reason || ''}
             onChange={(e) => setForm({ ...form, data: { ...d, referral: { ...(d.referral || {}), reason: e.target.value } } })}
           />
+          <Select
+            value={d.referral?.urgency || 'routine'}
+            onChange={(e) => setForm({ ...form, data: { ...d, referral: { ...(d.referral || {}), urgency: e.target.value } } })}
+          >
+            <option value="routine">Routine</option>
+            <option value="urgent">Urgent</option>
+          </Select>
         </div>
-        <p className="mt-1 text-xs text-ink/40">Recorded for documentation only — does not yet create a task (planned for a future phase).</p>
+        <p className="mt-1 text-xs text-ink/40">
+          {d.referral?.toDepartment && REFERRAL_TASK_ROUTES[d.referral.toDepartment]
+            ? `Saving will raise a task for ${d.referral.toDepartment}${d.referral.taskCreated ? ' (already raised)' : ''}.`
+            : 'Recorded for documentation only — task automation only wired for Physiotherapy referrals so far.'}
+        </p>
       </div>
     </div>
   )

@@ -27,6 +27,14 @@ export const FIELD_BINDINGS = {
   postOpInstructions: ['advice-template'],
   nextVisitPlan: ['advice-template'],
   dentalPhase: ['dental-procedure'],
+  physioHistory: ['physio-assessment-phrase'],
+  functionalLimitations: ['physio-assessment-phrase'],
+  gaitPostureNotes: ['physio-assessment-phrase'],
+  specialTests: ['physio-term'],
+  clinicalImpression: ['physio-assessment-phrase'],
+  goalsShort: ['physio-assessment-phrase'],
+  goalsLong: ['physio-assessment-phrase'],
+  precautions: ['advice-template'],
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
