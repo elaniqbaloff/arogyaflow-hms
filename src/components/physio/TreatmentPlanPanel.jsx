@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Plus, CalendarPlus, NotebookPen, Check } from 'lucide-react'
+import { ClipboardList, Plus, CalendarPlus, NotebookPen, Check, Sparkles } from 'lucide-react'
 import { useHospital } from '../../store/HospitalContext'
 import { useAuth } from '../../store/AuthContext'
 import { can } from '../../config/roles'
@@ -7,6 +7,7 @@ import { useToast } from '../ui/Toast'
 import { Badge, Select, Input, Textarea, EmptyState } from '../ui/primitives'
 import { TASK_STATUS_TONES } from '../../config/statusTones'
 import { formatDate, today, uid, inr } from '../../lib/utils'
+import { REHAB_ORDER_SETS } from '../../data/rehabOrderSets'
 
 const blankNoteDraft = () => ({ painScore: '', keyRomLabel: '', keyRomDegrees: '', notesDone: '', notesResponse: '', nextSessionFocus: '' })
 
@@ -67,6 +68,15 @@ export function TreatmentPlanPanel({ dept }) {
       referralId: openReferral?.id || null, billing: 'session', packagePriceId: packagePricing[0]?.id || '',
     })
     setCreating(true)
+  }
+
+  // Rehab order sets (SA-P3, §10.11) — prefills the create-plan form's
+  // fields only; nothing is created until the physiotherapist saves.
+  const applyOrderSet = (orderSet) => {
+    setDraft((d) => ({
+      ...d, diagnosis: orderSet.diagnosis, goals: orderSet.goals,
+      plannedSessions: orderSet.plannedSessions, frequency: orderSet.frequency,
+    }))
   }
 
   // Package/session billing (§10.8) — choosing "Package" here creates the
@@ -180,6 +190,12 @@ export function TreatmentPlanPanel({ dept }) {
             {openReferral && draft.referralId && (
               <p className="text-xs text-gold-700">Prefilled from {openReferral.createdBy}'s referral — edit as needed.</p>
             )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1 text-xs text-ink/50"><Sparkles size={12} /> Quick start:</span>
+              {Object.values(REHAB_ORDER_SETS).map((os) => (
+                <button key={os.label} type="button" className="btn-outline btn-sm" onClick={() => applyOrderSet(os)}>{os.label}</button>
+              ))}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <span className="label">Diagnosis</span>

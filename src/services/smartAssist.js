@@ -35,6 +35,7 @@ export const FIELD_BINDINGS = {
   goalsShort: ['physio-assessment-phrase'],
   goalsLong: ['physio-assessment-phrase'],
   precautions: ['advice-template'],
+  romMovement: ['physio-term'],
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

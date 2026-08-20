@@ -186,22 +186,33 @@ const DENTAL_PROCEDURES = [
   ['ct_dent_rct_restoration', 'Post-Endodontic Restoration', []],
 ].map(([id, t, abbreviations, aliases]) => term(id, t, 'dental-procedure', ['DENT'], { abbreviations, aliases }))
 
-// ── Physio terms (~7) ──
+// ── Physio terms (~15) — includes ROM-entry movement names (§10.11),
+//    bound to the RomEntryTable's Movement field via SmartField.
 const PHYSIO_TERMS = [
   ['ct_phys_rom', 'Range of Motion', ['ROM']],
   ['ct_phys_nprs', 'Numeric Pain Rating Scale', ['NPRS']],
+  ['ct_phys_vas', 'Visual Analog Scale', ['VAS']],
   ['ct_phys_mmt', 'Manual Muscle Testing', ['MMT']],
   ['ct_phys_spasticity', 'Spasticity', []],
   ['ct_phys_contracture', 'Contracture', []],
   ['ct_phys_hemiparesis', 'Hemiparesis', []],
   ['ct_phys_strengthening', 'Muscle Strengthening', []],
+  ['ct_phys_mv_flexion', 'Flexion', []],
+  ['ct_phys_mv_extension', 'Extension', []],
+  ['ct_phys_mv_abduction', 'Abduction', []],
+  ['ct_phys_mv_adduction', 'Adduction', []],
+  ['ct_phys_mv_internal_rotation', 'Internal Rotation', []],
+  ['ct_phys_mv_external_rotation', 'External Rotation', []],
+  ['ct_phys_mv_pronation', 'Pronation', []],
+  ['ct_phys_mv_supination', 'Supination', []],
 ].map(([id, t, abbreviations]) => term(id, t, 'physio-term', ['PHYS', 'OT'], { abbreviations }))
 
-// ── Physio assessment phrases (~8) ──
+// ── Physio assessment phrases (~11) ──
 const PHYSIO_PHRASES = [
   'Gait training', 'Unable to bear weight', 'Improved balance since last session',
   'Requires assistance for transfers', 'Independent with mobility aid', 'Weakness on affected side',
   'Tolerating exercises well', 'Reduced pain on movement',
+  'Reduced lumbar flexion', 'Antalgic gait', 'Improved tolerance to standing',
 ].map((t, i) => term(`ct_phys_phrase_${i}`, t, 'physio-assessment-phrase', ['PHYS', 'OT']))
 
 // ── General procedures (~9) ──

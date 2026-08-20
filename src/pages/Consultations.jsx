@@ -538,7 +538,7 @@ function ConsultationForm({ form, setForm, state, departmentForPatient }) {
 
           <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink/40">Objective</p>
           <Field label="Range of motion">
-            <RomEntryTable value={d.romEntries || []} onChange={(next) => setField('romEntries', next)} />
+            <RomEntryTable value={d.romEntries || []} onChange={(next) => setField('romEntries', next)} departmentCode={department?.code} recordId={d.id} />
           </Field>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Strength grade (MMT 0–5)">

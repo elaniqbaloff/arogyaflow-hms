@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Select, Input } from './primitives'
+import { SmartField } from './SmartField'
 import { uid } from '../../lib/utils'
 
 const JOINTS = ['Cervical Spine', 'Shoulder', 'Elbow', 'Wrist', 'Lumbar Spine', 'Hip', 'Knee', 'Ankle']
@@ -7,8 +8,10 @@ const SIDES = ['Left', 'Right', 'Bilateral', 'N/A']
 
 // Repeatable row editor for ROM entries (§10.2 Objective: `[{joint,
 // movement, degrees, side}]`) — same add/remove row pattern as the
-// Consultations.jsx prescription-item rows.
-export function RomEntryTable({ value = [], onChange }) {
+// Consultations.jsx prescription-item rows. Movement is a SmartField
+// (§10.11) bound to physio-term's movement-name entries; departmentCode/
+// recordId are optional passthroughs for that suggestion ranking.
+export function RomEntryTable({ value = [], onChange, departmentCode, recordId }) {
   const addRow = () => onChange([...value, { id: uid('rom'), joint: JOINTS[0], movement: '', degrees: '', side: 'Bilateral' }])
   const removeRow = (id) => onChange(value.filter((r) => r.id !== id))
   const updateRow = (id, key, val) => onChange(value.map((r) => (r.id === id ? { ...r, [key]: val } : r)))
@@ -33,7 +36,11 @@ export function RomEntryTable({ value = [], onChange }) {
               </Select>
             </div>
             <div className="col-span-4">
-              <Input placeholder="e.g. Flexion" value={row.movement} onChange={(e) => updateRow(row.id, 'movement', e.target.value)} />
+              <SmartField
+                fieldKey="romMovement" departmentCode={departmentCode} recordId={recordId}
+                value={row.movement} onChange={(e) => updateRow(row.id, 'movement', e.target.value)}
+                placeholder="e.g. Flexion"
+              />
             </div>
             <div className="col-span-2">
               <Input type="number" placeholder="°" value={row.degrees} onChange={(e) => updateRow(row.id, 'degrees', e.target.value)} />
