@@ -69,6 +69,17 @@ section of it.
   page management lands on: hospital pulse, flow & delays, department
   load/bottlenecks, clinical ops + staff workload, and an alerts rail.
 
+**Post-Phase-9 fix (not a blueprint phase, a standalone bug)** — the
+`billableItems` collection (pending charges pushed by dental procedure
+completion, physio pay-per-session billing, and two seeded therapy/nursing
+rows) was **write-only**: nothing ever read it, so completed work silently
+never reached an invoice. `src/pages/Billing.jsx` now has a **Pending
+Items** card (only rendered when pending items exist) that lists them,
+lets staff generate/select into a pre-filled invoice, and marks the
+source item `status: 'invoiced'` with a `billId` reference once billed.
+If you add a new `billableItems` producer anywhere, it'll show up here
+automatically — no additional wiring needed.
+
 **Phase 10 (backend/security/compliance readiness) has NOT been started.**
 This is the move from the current localStorage-only demo to a real backend
 with a database, real authentication, and server-enforced permissions. There
@@ -181,7 +192,17 @@ lab panels, a single atomic `prim.batch()` across several new records), no
 repo verb involved until the user actually saves. Check which shape you're
 actually in before copying either pattern to a new department.
 
-### 5.5 Always verify against a production build
+### 5.5 A collection with writers but no readers can hide in plain sight
+
+`billableItems` accumulated real data (seed rows + a dental-completion
+hook) for multiple phases before anyone noticed nothing ever read it —
+see the "Post-Phase-9 fix" note in §2. Before adding a new producer to an
+existing collection (or when auditing one you didn't build), grep the
+whole `src/` tree for it and confirm something actually consumes what
+you're about to write — a write-only collection is a silent no-op feature,
+not a working one.
+
+### 5.6 Always verify against a production build
 
 `npm run dev`'s HMR occasionally throws a harmless
 `"useHospital must be used within HospitalProvider"` console error during
@@ -211,6 +232,7 @@ real. Conversely, **do** treat every *other* console error as real.
 | FDI tooth picker | `src/components/ui/ToothPicker.jsx` |
 | Management dashboard | `src/pages/CommandCenter.jsx` |
 | Generic per-department hub | `src/pages/DepartmentHub.jsx` |
+| Billing + Pending Items (billableItems consumer) | `src/pages/Billing.jsx` |
 | Status→color tone maps | `src/config/statusTones.js` |
 | Sidebar nav config | `src/config/navigation.js` |
 
