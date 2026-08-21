@@ -19,7 +19,8 @@ import {
   Clock, LogOut, FlaskConical, Pill, AlertTriangle,
 } from 'lucide-react'
 import { useHospital } from '../store/HospitalContext'
-import { PageHeader, StatCard } from '../components/ui/primitives'
+import { PageHeader, StatCard, Badge } from '../components/ui/primitives'
+import { departmentOptions, departmentDotClass } from '../config/departmentUtils'
 import { inr, today } from '../lib/utils'
 import { computeBill } from '../lib/billing'
 import { emptyClearance, allGatesCleared } from '../services/discharge'
@@ -30,6 +31,15 @@ const billTotal = (b) => b.total ?? computeBill({
 
 const hoursBetween = (a, b) => (new Date(b) - new Date(a)) / 36e5
 const LAB_STALE_HOURS = 24
+
+// Bottleneck config (§12 Row 3) — a department is flagged when its oldest
+// open task has sat longer than DEPT_STALE_HOURS, or its open-task queue
+// is longer than DEPT_QUEUE_LIMIT. Plain code constants, not a Settings UI
+// — "config" in the blueprint's own parenthetical just means "a tunable
+// value," not necessarily an admin-editable one; revisit if management
+// asks to tune these themselves.
+const DEPT_STALE_HOURS = 24
+const DEPT_QUEUE_LIMIT = 5
 
 export default function CommandCenter() {
   const { state } = useHospital()
@@ -83,10 +93,27 @@ export default function CommandCenter() {
 
     const openCriticalTasks = state.tasks.filter((t) => t.priority === 'Critical' && !['Completed', 'Cancelled'].includes(t.status)).length
 
+    // ── Row 3: department load & bottlenecks (§12) ──
+    // Appointments/bills store department as a display-name string in this
+    // codebase (same convention journey.js already resolves — Phase 8a's
+    // note); tasks already carry assignedDepartment as a CODE directly
+    // (Phase 1a), so that filter needs no resolution.
+    const departmentLoad = departmentOptions(state).map((dept) => {
+      const apptsToday = state.appointments.filter((a) => a.department === dept.name && a.date === todayStr).length
+      const openTasks = state.tasks.filter((t) => t.assignedDepartment === dept.code && !['Completed', 'Cancelled'].includes(t.status))
+      const oldestTaskHours = openTasks.length ? Math.max(...openTasks.map((t) => hoursBetween(t.createdAt, now))) : null
+      const revMtd = state.bills
+        .filter((b) => b.department === dept.name && b.date?.startsWith(monthPrefix))
+        .reduce((s, b) => s + (b.paidAmount || 0), 0)
+      const bottleneck = (oldestTaskHours != null && oldestTaskHours > DEPT_STALE_HOURS) || openTasks.length > DEPT_QUEUE_LIMIT
+      return { code: dept.code, name: dept.name, apptsToday, openTaskCount: openTasks.length, oldestTaskHours, revMtd, bottleneck }
+    }).sort((a, b) => Number(b.bottleneck) - Number(a.bottleneck) || b.openTaskCount - a.openTaskCount)
+
     return {
       opdVisitsToday, occupied, totalBeds, occupancyPct, admissionsToday, dischargesToday, revenueToday, revenueMtd, pendingDues,
       pendingApprovalsCount: pendingApprovals.length, oldestApprovalHours, dischargeBlocked,
       labPending: labOpen.length, labStale, toDispense, pharmacyAlerts, openCriticalTasks,
+      departmentLoad,
     }
   }, [state])
 
@@ -133,6 +160,41 @@ export default function CommandCenter() {
         <Link to="/tasks" className="block">
           <StatCard label="Open Critical Tasks" value={data.openCriticalTasks} icon={AlertTriangle} tone="rose" />
         </Link>
+      </div>
+
+      <div className="mb-2 mt-8 text-[11px] font-semibold uppercase tracking-wide text-ink/40">Department Load</div>
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px]">
+            <thead className="bg-cream/60">
+              <tr>
+                <th className="th">Department</th>
+                <th className="th text-right">Appts Today</th>
+                <th className="th text-right">Open Tasks</th>
+                <th className="th text-right">Oldest Task</th>
+                <th className="th text-right">Revenue MTD</th>
+                <th className="th"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand">
+              {data.departmentLoad.map((d) => (
+                <tr key={d.code} className="hover:bg-cream/40">
+                  <td className="td">
+                    <Link to={`/departments/${d.code}`} className="flex items-center gap-2 font-medium text-brand-900 hover:text-brand-700 hover:underline">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${departmentDotClass(state, d.code)}`} />
+                      {d.name}
+                    </Link>
+                  </td>
+                  <td className="td text-right">{d.apptsToday}</td>
+                  <td className="td text-right">{d.openTaskCount}</td>
+                  <td className="td text-right">{d.oldestTaskHours == null ? '—' : `${Math.round(d.oldestTaskHours)}h`}</td>
+                  <td className="td text-right">{inr(d.revMtd)}</td>
+                  <td className="td text-right">{d.bottleneck && <Badge tone="rose">Bottleneck</Badge>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   )
