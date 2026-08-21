@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom'
 import {
   Radar, CalendarDays, BedDouble, ArrowRightCircle, IndianRupee,
   Clock, LogOut, FlaskConical, Pill, AlertTriangle, Flower2, Smile, Activity, Users,
+  Ban, PackageX,
 } from 'lucide-react'
 import { useHospital } from '../store/HospitalContext'
 import { PageHeader, StatCard, Badge } from '../components/ui/primitives'
@@ -137,12 +138,28 @@ export default function CommandCenter() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
 
+    // ── Alerts rail (§12) — the SAME filters Row 2 already counts, turned
+    // into lists instead of counts. No new aggregation here.
+    const criticalTaskItems = state.tasks
+      .filter((t) => t.priority === 'Critical' && !['Completed', 'Cancelled'].includes(t.status))
+      .map((t) => ({ id: t.id, label: t.label, detail: t.notes }))
+    const blockedTaskItems = state.tasks
+      .filter((t) => t.status === 'Blocked')
+      .map((t) => ({ id: t.id, label: t.label, detail: t.blockedReason }))
+    const staleApprovalItems = pendingApprovals
+      .filter((a) => hoursBetween(a.requestedAt, now) > 24)
+      .map((a) => ({ id: a.id, label: a.typeLabel, detail: `Requested ${Math.round(hoursBetween(a.requestedAt, now))}h ago by ${a.requestedBy}` }))
+    const stockAlertItems = state.tasks
+      .filter((t) => ['low-stock', 'near-expiry'].includes(t.type) && !['Completed', 'Cancelled'].includes(t.status))
+      .map((t) => ({ id: t.id, label: t.label, detail: t.notes }))
+
     return {
       opdVisitsToday, occupied, totalBeds, occupancyPct, admissionsToday, dischargesToday, revenueToday, revenueMtd, pendingDues,
       pendingApprovalsCount: pendingApprovals.length, oldestApprovalHours, dischargeBlocked,
       labPending: labOpen.length, labStale, toDispense, pharmacyAlerts, openCriticalTasks,
       departmentLoad,
       therapiesScheduledToday, therapiesCompletedToday, dentalProceduresWeek, physioActivePlans, physioSessionsToday, staffWorkload,
+      criticalTaskItems, blockedTaskItems, staleApprovalItems, stockAlertItems,
     }
   }, [state])
 
@@ -150,7 +167,9 @@ export default function CommandCenter() {
     <>
       <PageHeader title="Management Command Center" subtitle="Hospital pulse, flow, department load and clinical operations" icon={Radar} />
 
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink/40">Hospital Pulse</div>
+      <AlertsRail data={data} />
+
+      <div className="mb-2 mt-8 text-[11px] font-semibold uppercase tracking-wide text-ink/40">Hospital Pulse</div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <Link to="/patients" className="block">
           <StatCard label="OPD Visits Today" value={data.opdVisitsToday} icon={CalendarDays} tone="sky" />
@@ -267,5 +286,45 @@ export default function CommandCenter() {
         )}
       </div>
     </>
+  )
+}
+
+// Alerts rail (§12) — four short lists, each linking to its owning page;
+// a category with nothing to show is omitted entirely rather than
+// rendering an empty section. Every item here is the SAME data Row 2
+// already counts (§12 Row 2 / Phase 9b) — this is a presentation-only
+// step, no new aggregation.
+function AlertsRail({ data }) {
+  const sections = [
+    { key: 'critical', title: 'Critical Tasks', icon: AlertTriangle, tone: 'text-rose-600', items: data.criticalTaskItems, to: '/tasks' },
+    { key: 'blocked', title: 'Blocked Tasks', icon: Ban, tone: 'text-rose-600', items: data.blockedTaskItems, to: '/tasks' },
+    { key: 'approvals', title: 'Approvals Over 24h', icon: Clock, tone: 'text-gold-600', items: data.staleApprovalItems, to: '/approvals' },
+    { key: 'stock', title: 'Stock Alerts', icon: PackageX, tone: 'text-gold-600', items: data.stockAlertItems, to: '/pharmacy' },
+  ].filter((s) => s.items.length > 0)
+
+  if (sections.length === 0) return null
+
+  return (
+    <div className="mb-6 card overflow-hidden">
+      <div className="border-b border-sand p-4"><h3 className="text-sm font-semibold text-brand-900">Alerts</h3></div>
+      <div className="grid grid-cols-1 divide-y divide-sand sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+        {sections.map((s) => (
+          <Link key={s.key} to={s.to} className="block p-4 hover:bg-cream/40">
+            <div className={`mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide ${s.tone}`}>
+              <s.icon size={14} /> {s.title} ({s.items.length})
+            </div>
+            <ul className="space-y-1.5">
+              {s.items.slice(0, 3).map((item) => (
+                <li key={item.id} className="text-xs">
+                  <p className="font-medium text-brand-900">{item.label}</p>
+                  {item.detail && <p className="truncate text-ink/50">{item.detail}</p>}
+                </li>
+              ))}
+              {s.items.length > 3 && <li className="text-xs text-ink/40">+{s.items.length - 3} more</li>}
+            </ul>
+          </Link>
+        ))}
+      </div>
+    </div>
   )
 }
