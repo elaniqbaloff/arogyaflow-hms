@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Receipt, Plus, Pencil, Trash2, IndianRupee, Wallet, Clock, Eye, Printer } from 'lucide-react'
+import { Receipt, Plus, Pencil, Trash2, IndianRupee, Wallet, Clock, Eye, Printer, FileStack, ReceiptText } from 'lucide-react'
 import { useHospital, useLookups } from '../store/HospitalContext'
 import { useAuth } from '../store/AuthContext'
 import { can } from '../config/roles'
@@ -8,11 +8,24 @@ import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import {
   PageHeader, StatCard, Badge, Field, Input, Select, SearchInput, EmptyState,
 } from '../components/ui/primitives'
-import { inr, formatDate, today, codeNo } from '../lib/utils'
+import { inr, formatDate, today, codeNo, uid } from '../lib/utils'
 import { computeBill } from '../lib/billing'
 import { printInvoice } from '../lib/printDocument'
 
 const BILL_TYPES = ['OPD', 'IPD', 'Pharmacy', 'Lab', 'Panchakarma']
+
+// Best-effort bill type guess when generating an invoice from pending
+// billableItems — these items only carry a department string, never a
+// bill type, so this maps the departments actually seen in practice
+// (Panchakarma therapy, Dental procedures, Physio sessions, IPD nursing)
+// to the closest BILL_TYPES value. Falls back to 'OPD'.
+const inferBillType = (department, hasIpdEpisode) => {
+  if (hasIpdEpisode) return 'IPD'
+  if (department === 'Panchakarma') return 'Panchakarma'
+  if (department === 'Lab' || department === 'Diagnostics') return 'Lab'
+  if (department === 'Pharmacy') return 'Pharmacy'
+  return 'OPD'
+}
 
 export default function Billing() {
   const { state, add, update, remove } = useHospital()
@@ -26,6 +39,14 @@ export default function Billing() {
   const [form, setForm] = useState(null)
   const [view, setView] = useState(null)
   const [confirm, setConfirm] = useState(null)
+
+  // Pending billable items (procedure/therapy/session completions awaiting
+  // invoicing — see repositories.js's completeItem/applyPhysioSessionCompletion
+  // and workflowSeed.js's seeded rows). This is the first UI that reads
+  // state.billableItems at all — until now it was write-only.
+  const [pendingQuery, setPendingQuery] = useState('')
+  const [pendingDeptFilter, setPendingDeptFilter] = useState('all')
+  const [selectedPendingIds, setSelectedPendingIds] = useState([])
 
   const canCreate = can(user, 'billing.create')
   const canEdit = can(user, 'billing.update')
@@ -49,6 +70,24 @@ export default function Billing() {
       })
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [state.bills, query, statusFilter, typeFilter, patientName])
+
+  const pendingItems = useMemo(() => {
+    return (state.billableItems || [])
+      .filter((bi) => bi.status === 'pending')
+      .filter((bi) => !pendingQuery || patientName(bi.patientId).toLowerCase().includes(pendingQuery.toLowerCase()) || bi.desc.toLowerCase().includes(pendingQuery.toLowerCase()))
+      .filter((bi) => pendingDeptFilter === 'all' || bi.department === pendingDeptFilter)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  }, [state.billableItems, pendingQuery, pendingDeptFilter, patientName])
+
+  // Only departments actually present in pending items, not every
+  // department in the hospital — same "don't show empty filters" call
+  // as the Command Center's department-load table (§12 Phase 9c).
+  const pendingDepts = useMemo(
+    () => [...new Set((state.billableItems || []).filter((bi) => bi.status === 'pending').map((bi) => bi.department))],
+    [state.billableItems]
+  )
+
+  const pendingTotal = useMemo(() => pendingItems.reduce((s, bi) => s + (bi.amount || 0), 0), [pendingItems])
 
   const blankBill = () => ({
     patientId: state.patients[0]?.id || '',
@@ -75,13 +114,58 @@ export default function Billing() {
     }
     if (form.mode === 'add') {
       const invoiceNo = codeNo('INV', state.bills.length + 1)
-      add('bills', { ...clean, invoiceNo })
+      // Generated up front (not left to the generic add() reducer to
+      // assign) so a bill created from pending billableItems can be
+      // cross-referenced on them in the same action — see
+      // form.billableItemIds below.
+      const billId = uid('bill')
+      add('bills', { ...clean, id: billId, invoiceNo })
+      if (form.billableItemIds?.length) {
+        form.billableItemIds.forEach((biId) => update('billableItems', biId, { status: 'invoiced', billId, invoiceNo }))
+      }
       toast(`Invoice ${invoiceNo} generated — ${inr(bd.grandTotal)}.`)
     } else {
       update('bills', d.id, clean)
       toast(`Invoice ${d.invoiceNo} updated.`)
     }
     setForm(null)
+    setSelectedPendingIds([])
+  }
+
+  // Pending billable items → invoice (task: wire billableItems to Billing).
+  // Selection is constrained to one patient at a time — a single invoice
+  // can't sensibly bill two different patients' items.
+  const togglePendingSelect = (item) => {
+    setSelectedPendingIds((ids) => {
+      if (ids.includes(item.id)) return ids.filter((id) => id !== item.id)
+      const firstSelected = pendingItems.find((bi) => bi.id === ids[0])
+      if (firstSelected && firstSelected.patientId !== item.patientId) {
+        toast('Select pending items from one patient at a time.', 'error')
+        return ids
+      }
+      return [...ids, item.id]
+    })
+  }
+
+  const generateFromSelected = (ids) => {
+    const items = pendingItems.filter((bi) => ids.includes(bi.id))
+    if (items.length === 0) return
+    const first = items[0]
+    const patient = patientById[first.patientId]
+    const sameEpisode = items.every((bi) => bi.episodeId === first.episodeId)
+    const episode = sameEpisode && first.episodeId ? state.episodes.find((e) => e.id === first.episodeId) : null
+    setForm({
+      mode: 'add',
+      billableItemIds: ids,
+      data: {
+        ...blankBill(),
+        patientId: first.patientId,
+        department: first.department || patient?.department || 'Ayurveda',
+        billType: inferBillType(first.department, episode?.type === 'IPD'),
+        episodeId: episode?.id || null,
+        items: items.map((bi) => ({ desc: bi.desc, qty: 1, rate: bi.amount || 0 })),
+      },
+    })
   }
 
   const setStatus = (b, status) => {
@@ -112,6 +196,65 @@ export default function Billing() {
         <StatCard label="Total Billed" value={inr(totals.billed)} icon={Wallet} tone="sky" />
         <StatCard label="Pending Dues" value={inr(totals.dues)} icon={Clock} tone="rose" />
       </div>
+
+      {/* Pending billable items — completed procedures/sessions/therapies
+          awaiting invoicing (repositories.js pushes these on completion;
+          this is the first UI that ever reads state.billableItems). */}
+      {pendingItems.length > 0 && (
+        <div className="mb-6 card overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand p-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-brand-900">
+              <FileStack size={16} /> Pending Items ({pendingItems.length}) — {inr(pendingTotal)} awaiting invoice
+            </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <SearchInput value={pendingQuery} onChange={setPendingQuery} placeholder="Search patient or item…" />
+              <Select value={pendingDeptFilter} onChange={(e) => setPendingDeptFilter(e.target.value)} className="w-auto">
+                <option value="all">All departments</option>
+                {pendingDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+              </Select>
+              {canCreate && selectedPendingIds.length > 0 && (
+                <button className="btn-primary btn-sm" onClick={() => generateFromSelected(selectedPendingIds)}>
+                  <ReceiptText size={14} /> Generate Invoice ({selectedPendingIds.length})
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px]">
+              <thead className="bg-cream/60"><tr>
+                {canCreate && <th className="th w-8"></th>}
+                <th className="th">Patient</th><th className="th">Department</th><th className="th">Item</th>
+                <th className="th">Source</th><th className="th text-right">Amount</th><th className="th">Since</th>
+                {canCreate && <th className="th text-right">Actions</th>}
+              </tr></thead>
+              <tbody className="divide-y divide-sand">
+                {pendingItems.map((bi) => (
+                  <tr key={bi.id} className="hover:bg-cream/40">
+                    {canCreate && (
+                      <td className="td">
+                        <input type="checkbox" checked={selectedPendingIds.includes(bi.id)} onChange={() => togglePendingSelect(bi)} />
+                      </td>
+                    )}
+                    <td className="td">{patientName(bi.patientId)}</td>
+                    <td className="td"><Badge tone="slate">{bi.department}</Badge></td>
+                    <td className="td font-medium text-brand-900">{bi.desc}</td>
+                    <td className="td text-ink/50">{bi.source}</td>
+                    <td className="td text-right">{inr(bi.amount || 0)}</td>
+                    <td className="td text-ink/50">{formatDate(bi.createdAt)}</td>
+                    {canCreate && (
+                      <td className="td text-right">
+                        <button className="btn-ghost btn-sm text-brand-700" title="Generate invoice for this item" onClick={() => generateFromSelected([bi.id])}>
+                          <ReceiptText size={15} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-sand p-4">
