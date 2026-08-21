@@ -16,7 +16,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Radar, CalendarDays, BedDouble, ArrowRightCircle, IndianRupee,
-  Clock, LogOut, FlaskConical, Pill, AlertTriangle,
+  Clock, LogOut, FlaskConical, Pill, AlertTriangle, Flower2, Smile, Activity, Users,
 } from 'lucide-react'
 import { useHospital } from '../store/HospitalContext'
 import { PageHeader, StatCard, Badge } from '../components/ui/primitives'
@@ -109,11 +109,40 @@ export default function CommandCenter() {
       return { code: dept.code, name: dept.name, apptsToday, openTaskCount: openTasks.length, oldestTaskHours, revMtd, bottleneck }
     }).sort((a, b) => Number(b.bottleneck) - Number(a.bottleneck) || b.openTaskCount - a.openTaskCount)
 
+    // ── Row 4: clinical operations & staff workload (§12) ──
+    const therapiesToday = state.therapies.filter((t) => t.date === todayStr)
+    const therapiesScheduledToday = therapiesToday.filter((t) => t.status === 'scheduled').length
+    const therapiesCompletedToday = therapiesToday.filter((t) => t.status === 'completed').length
+
+    const weekAgoStr = new Date(Date.now() - 7 * 24 * 36e5).toISOString().slice(0, 10)
+    const dentalProceduresWeek = (state.procedurePlans || [])
+      .flatMap((p) => p.items || [])
+      .filter((i) => i.status === 'completed' && (i.completedAt || '').slice(0, 10) >= weekAgoStr).length
+
+    const physioActivePlans = (state.treatmentPlans || []).filter((p) => p.status === 'active').length
+    // Same "reason='Session' + department='Physiotherapy'" filter Reports.jsx's
+    // no-show rate already uses (§10.10) — just scoped to today here.
+    const physioSessionsToday = state.appointments.filter((a) => a.reason === 'Session' && a.department === 'Physiotherapy' && a.date === todayStr).length
+
+    // Staff workload (§12): open tasks per assignee, top 10, keyed by
+    // assignedUserId per the blueprint's own phrasing (not acceptedBy —
+    // assignedUserId is set on reassignment/creation, acceptedBy only once
+    // claimed; the blueprint wants who OWNS the load, not just who's started it).
+    const workloadCounts = {}
+    state.tasks
+      .filter((t) => !['Completed', 'Cancelled'].includes(t.status) && t.assignedUserId)
+      .forEach((t) => { workloadCounts[t.assignedUserId] = (workloadCounts[t.assignedUserId] || 0) + 1 })
+    const staffWorkload = Object.entries(workloadCounts)
+      .map(([userId, count]) => ({ userId, name: state.users.find((u) => u.id === userId)?.name || userId, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
+
     return {
       opdVisitsToday, occupied, totalBeds, occupancyPct, admissionsToday, dischargesToday, revenueToday, revenueMtd, pendingDues,
       pendingApprovalsCount: pendingApprovals.length, oldestApprovalHours, dischargeBlocked,
       labPending: labOpen.length, labStale, toDispense, pharmacyAlerts, openCriticalTasks,
       departmentLoad,
+      therapiesScheduledToday, therapiesCompletedToday, dentalProceduresWeek, physioActivePlans, physioSessionsToday, staffWorkload,
     }
   }, [state])
 
@@ -195,6 +224,47 @@ export default function CommandCenter() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mb-2 mt-8 text-[11px] font-semibold uppercase tracking-wide text-ink/40">Clinical Operations</div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Link to="/therapy" className="block">
+          <StatCard
+            label="Therapy Sessions Today" value={`${data.therapiesScheduledToday} / ${data.therapiesCompletedToday}`}
+            icon={Flower2} tone="brand" sub="Scheduled / completed"
+          />
+        </Link>
+        <Link to="/departments/DENT" className="block">
+          <StatCard label="Dental Procedures This Week" value={data.dentalProceduresWeek} icon={Smile} tone="sky" />
+        </Link>
+        <Link to="/departments/PHYS" className="block">
+          <StatCard
+            label="Physio Active Plans" value={data.physioActivePlans} icon={Activity} tone="gold"
+            sub={`${data.physioSessionsToday} session(s) today`}
+          />
+        </Link>
+      </div>
+
+      <div className="mt-4 card overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-sand p-4">
+          <Users size={16} className="text-brand-700" />
+          <h3 className="text-sm font-semibold text-brand-900">Staff Workload — Top 10 Open Tasks</h3>
+        </div>
+        {data.staffWorkload.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-ink/40">No open tasks assigned to a specific person right now.</p>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-cream/60"><tr><th className="th">Staff Member</th><th className="th text-right">Open Tasks</th></tr></thead>
+            <tbody className="divide-y divide-sand">
+              {data.staffWorkload.map((s) => (
+                <tr key={s.userId} className="hover:bg-cream/40">
+                  <td className="td font-medium text-brand-900">{s.name}</td>
+                  <td className="td text-right">{s.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   )
